@@ -38,6 +38,7 @@ export function stripe(): StripeLike {
     maxNetworkRetries: 2,
     timeout: 20_000,
     appInfo: { name: "ai-character-studio" },
+    httpClient: Stripe.createFetchHttpClient(), // uses global fetch (proxy-aware with NODE_USE_ENV_PROXY=1)
     ...(base ? { host: base.hostname, port: Number(base.port), protocol: base.protocol.replace(":", "") as "http" | "https" } : {}),
   });
   return client;

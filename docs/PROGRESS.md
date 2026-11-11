@@ -30,7 +30,7 @@ _Last updated: 2026-11-11_
 
 ## Blockers (need owner input)
 1. **Real image generation not yet proven.** No `OPENAI_API_KEY`, and this build sandbox cannot reach `api.openai.com` or `developers.openai.com`. Model capabilities were verified from the official SDK's bundled docs. Phase 0's gate is open until one real job runs.
-2. **Stripe test mode not yet exercised against Stripe itself.** No test keys or Price IDs, and `api.stripe.com` is unreachable here. Verified with signed synthetic events and a local API mock.
+2. ~~Stripe test mode~~ **Verified against the real Stripe test API (2026-11-11)** with `npm run stripe:check`: 9 test prices created by `npm run stripe:setup`, real Checkout Sessions, and real events for subscribe (215), proration upgrade (665), top-up (765), partial refund (715), replay of 27 events (no-op) and cancel → Free. Still to do once deployed: a dashboard webhook endpoint with its own signing secret, and one checkout completed in a browser on checkout.stripe.com.
 3. Pricing inputs for cost reports (`OPENAI_IMAGE_*_USD_PER_MTOK`) must be copied from the current pricing page.
 4. Legal templates need counsel review. Brand, domain, support email and legal entity are placeholders.
 
