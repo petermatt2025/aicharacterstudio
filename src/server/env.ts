@@ -1,0 +1,80 @@
+import "server-only";
+import { z } from "zod";
+
+const bool = z
+  .enum(["true", "false", "1", "0"])
+  .optional()
+  .transform((v) => v === "true" || v === "1");
+
+const schema = z.object({
+  NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
+  APP_URL: z.string().url().default("http://localhost:3000"),
+  APP_NAME: z.string().default("AI Character Studio"),
+  DATABASE_URL: z.string().min(1).default("postgres://localhost:5432/acs_dev"),
+
+  // Storage
+  STORAGE_DRIVER: z.enum(["local", "s3"]).default("local"),
+  STORAGE_LOCAL_DIR: z.string().default(".data/storage"),
+  S3_ENDPOINT: z.string().optional(),
+  S3_REGION: z.string().default("auto"),
+  S3_BUCKET: z.string().optional(),
+  S3_ACCESS_KEY_ID: z.string().optional(),
+  S3_SECRET_ACCESS_KEY: z.string().optional(),
+  S3_FORCE_PATH_STYLE: bool,
+
+  // Image provider
+  IMAGE_PROVIDER: z.enum(["openai", "fake"]).default("openai"),
+  OPENAI_API_KEY: z.string().optional(),
+  OPENAI_IMAGE_MODEL: z.string().default("gpt-image-2"),
+  OPENAI_MODERATION_MODEL: z.string().default("omni-moderation-latest"),
+  OPENAI_TIMEOUT_MS: z.coerce.number().int().positive().default(180_000),
+  // Optional pricing inputs for cost estimates (USD per 1M tokens). Leave empty until verified on the pricing page.
+  OPENAI_IMAGE_INPUT_USD_PER_MTOK: z.coerce.number().nonnegative().optional(),
+  OPENAI_IMAGE_INPUT_IMAGE_USD_PER_MTOK: z.coerce.number().nonnegative().optional(),
+  OPENAI_IMAGE_OUTPUT_USD_PER_MTOK: z.coerce.number().nonnegative().optional(),
+  MODERATION_PROVIDER: z.enum(["openai", "baseline"]).default("openai"),
+
+  // Stripe (TEST MODE ONLY until owner approval)
+  STRIPE_SECRET_KEY: z.string().optional(),
+  STRIPE_WEBHOOK_SECRET: z.string().optional(),
+  STRIPE_ALLOW_LIVE_MODE: bool,
+
+  // Email
+  EMAIL_TRANSPORT: z.enum(["console", "resend"]).default("console"),
+  RESEND_API_KEY: z.string().optional(),
+  EMAIL_FROM: z.string().default("AI Character Studio <no-reply@example.com>"),
+
+  // Ops
+  WORKER_CONCURRENCY: z.coerce.number().int().min(1).max(32).default(2),
+  SESSION_TTL_DAYS: z.coerce.number().int().min(1).max(90).default(30),
+  TRIAL_CREDITS: z.coerce.number().int().min(0).default(15),
+  TRIAL_CREDIT_DAYS: z.coerce.number().int().min(1).default(30),
+  TOPUP_EXPIRY_MONTHS: z.coerce.number().int().min(1).default(12),
+  MAX_UPLOAD_BYTES: z.coerce.number().int().positive().default(15 * 1024 * 1024),
+});
+
+export type Env = z.infer<typeof schema>;
+
+let cached: Env | null = null;
+
+export function env(): Env {
+  if (cached) return cached;
+  const parsed = schema.safeParse(process.env);
+  if (!parsed.success) {
+    throw new Error(`Invalid environment: ${parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ")}`);
+  }
+  const e = parsed.data;
+  if (e.NODE_ENV === "production") {
+    if (e.IMAGE_PROVIDER === "fake") throw new Error("IMAGE_PROVIDER=fake is forbidden in production");
+    if (e.STORAGE_DRIVER === "local") throw new Error("STORAGE_DRIVER=local is forbidden in production");
+    if (e.MODERATION_PROVIDER === "baseline") throw new Error("MODERATION_PROVIDER=baseline is forbidden in production");
+    if (e.EMAIL_TRANSPORT === "console") throw new Error("EMAIL_TRANSPORT=console is forbidden in production");
+  }
+  cached = e;
+  return e;
+}
+
+/** Test helper: force re-read of process.env. */
+export function resetEnvCache() {
+  cached = null;
+}
