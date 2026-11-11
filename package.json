@@ -20,7 +20,10 @@
     "test:e2e": "node scripts/e2e.mjs",
     "check": "npm run lint && npm run typecheck && npm run test",
     "stripe:check": "tsx --conditions=react-server --tsconfig tsconfig.json scripts/stripe-test-mode-check.ts",
-    "stripe:setup": "node scripts/stripe-setup.mjs"
+    "stripe:setup": "node scripts/stripe-setup.mjs",
+    "provider:check": "tsx --conditions=react-server --tsconfig tsconfig.json scripts/real-generation-check.ts",
+    "stripe:relay": "node scripts/stripe-relay.mjs",
+    "preview": "bash scripts/dev-preview.sh"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1166.0",

@@ -15,8 +15,9 @@ export default function Signup() {
     setBusy(true);
     setError(null);
     try {
-      await api("/api/auth/signup", { body: { email: f.get("email"), password: f.get("password"), displayName: f.get("displayName") ?? "", acceptTerms: f.get("terms") === "on" } });
-      router.push("/onboarding");
+      const r = await api<{ devVerifyUrl: string | null }>("/api/auth/signup", { body: { email: f.get("email"), password: f.get("password"), displayName: f.get("displayName") ?? "", acceptTerms: f.get("terms") === "on" } });
+      // Development only (no real email configured): go straight to the verification link.
+      router.push(r.devVerifyUrl ?? "/onboarding");
       router.refresh();
     } catch (err) {
       setError((err as Error).message);

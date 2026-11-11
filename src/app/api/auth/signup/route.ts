@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { route, setSessionCookie, clientIp } from "@/server/http";
-import { signup, createSession } from "@/server/accounts";
+import { signup, createSession, devVerificationUrl } from "@/server/accounts";
 import { rateLimit } from "@/server/rate-limit";
 import { getSetting } from "@/server/seed";
 
@@ -9,5 +9,6 @@ export const POST = route(async (req) => {
   const body = await req.json();
   const u = await signup(body);
   const s = await createSession(u.id);
-  return setSessionCookie(NextResponse.json({ ok: true, verificationSent: true }), s.token, s.maxAgeSeconds);
+  const devVerifyUrl = await devVerificationUrl(String(body.email ?? ""));
+  return setSessionCookie(NextResponse.json({ ok: true, verificationSent: true, devVerifyUrl }), s.token, s.maxAgeSeconds);
 });

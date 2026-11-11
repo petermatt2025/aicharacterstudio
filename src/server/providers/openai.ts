@@ -22,11 +22,14 @@ export class OpenAIImageProvider implements ImageProvider {
   private client: OpenAI;
   private caps: ProviderCapabilities;
 
-  constructor(opts: { apiKey: string; model: string; timeoutMs: number; baseURL?: string; fetch?: typeof fetch }) {
+  private stream: boolean;
+
+  constructor(opts: { apiKey: string; model: string; timeoutMs: number; baseURL?: string; fetch?: typeof fetch; stream?: boolean }) {
     const caps = OPENAI_MODEL_CAPABILITIES[opts.model];
     if (!caps) throw new Error(`Model ${opts.model} is not in the verified capability map`);
     this.caps = caps;
     this.model = opts.model;
+    this.stream = !!opts.stream;
     // Retries are handled by the job queue (idempotent per output), not the SDK.
     this.client = new OpenAI({ apiKey: opts.apiKey, timeout: opts.timeoutMs, maxRetries: 0, baseURL: opts.baseURL, fetch: opts.fetch });
   }
@@ -60,9 +63,14 @@ export class OpenAIImageProvider implements ImageProvider {
           safety_identifier,
         };
         if (caps.inputFidelity) params.input_fidelity = input.options?.identityStrength === "strict" ? "high" : "low";
-        res = await this.client.images.edit(params);
+        res = this.stream && input.requestedOutputs === 1
+          ? await collect(await this.client.images.edit({ ...params, stream: true, partial_images: 2 }))
+          : await this.client.images.edit(params);
       } else {
-        res = await this.client.images.generate({ model: this.model, prompt: input.prompt, n: input.requestedOutputs, size, quality, output_format: "png", moderation: "auto", safety_identifier });
+        const params: OpenAI.Images.ImageGenerateParamsNonStreaming = { model: this.model, prompt: input.prompt, n: input.requestedOutputs, size, quality, output_format: "png", moderation: "auto", safety_identifier };
+        res = this.stream && input.requestedOutputs === 1
+          ? await collect(await this.client.images.generate({ ...params, stream: true, partial_images: 2 }))
+          : await this.client.images.generate(params);
       }
     } catch (e) {
       throw mapOpenAIError(e);
@@ -87,6 +95,16 @@ export class OpenAIImageProvider implements ImageProvider {
       warnings,
     };
   }
+}
+
+/** Reduce a streamed response to the same shape as a non-streamed one (final image + usage; partials discarded). */
+async function collect(stream: AsyncIterable<OpenAI.Images.ImageEditStreamEvent | OpenAI.Images.ImageGenStreamEvent>): Promise<OpenAI.Images.ImagesResponse> {
+  for await (const ev of stream) {
+    if (ev.type === "image_edit.completed" || ev.type === "image_generation.completed") {
+      return { created: ev.created_at, data: [{ b64_json: ev.b64_json }], usage: ev.usage as OpenAI.Images.ImagesResponse["usage"] };
+    }
+  }
+  throw new ProviderError("transient", "Image stream ended without a completed image");
 }
 
 export function mapOpenAIError(e: unknown): ProviderError {

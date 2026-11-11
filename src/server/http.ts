@@ -36,10 +36,30 @@ export function errorResponse(e: unknown) {
 }
 
 /** Cookie is SameSite=Lax; additionally require same-origin Origin/Referer on state-changing requests. */
+function requestOriginHeader(req: NextRequest) {
+  return req.headers.get("origin") ?? (req.headers.get("referer") ? new URL(req.headers.get("referer")!).origin : null);
+}
+
+/** Origins this deployment is served from: APP_URL, the request host, and the public host set by a reverse proxy. */
+function allowedOrigins(req: NextRequest) {
+  const set = new Set([new URL(env().APP_URL).origin, req.nextUrl.origin]);
+  const host = req.headers.get("x-forwarded-host") ?? req.headers.get("host");
+  if (host) {
+    const proto = req.headers.get("x-forwarded-proto")?.split(",")[0]?.trim() ?? req.nextUrl.protocol.replace(":", "");
+    set.add(`${proto}://${host.split(",")[0]!.trim()}`);
+  }
+  return set;
+}
+
 export function assertSameOrigin(req: NextRequest) {
-  const origin = req.headers.get("origin") ?? (req.headers.get("referer") ? new URL(req.headers.get("referer")!).origin : null);
-  const allowed = new Set([new URL(env().APP_URL).origin, req.nextUrl.origin]);
-  if (!origin || !allowed.has(origin)) throw new AppError("forbidden", "Cross-origin request blocked");
+  const origin = requestOriginHeader(req);
+  if (!origin || !allowedOrigins(req).has(origin)) throw new AppError("forbidden", "Cross-origin request blocked");
+}
+
+/** Public base URL for redirects (e.g. Stripe return URLs): the verified same-origin request origin, else APP_URL. */
+export function publicBaseUrl(req: NextRequest) {
+  const origin = requestOriginHeader(req);
+  return origin && allowedOrigins(req).has(origin) ? origin : env().APP_URL;
 }
 
 export async function optionalUser(req: NextRequest): Promise<SessionUser | null> {

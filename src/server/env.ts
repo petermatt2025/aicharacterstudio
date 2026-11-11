@@ -29,6 +29,8 @@ const schema = z.object({
   OPENAI_API_KEY: z.string().optional(),
   OPENAI_IMAGE_MODEL: z.string().default("gpt-image-2"),
   OPENAI_MODERATION_MODEL: z.string().default("omni-moderation-latest"),
+  // Stream image responses (keeps long requests alive behind proxies with short idle timeouts; partial previews add a few output tokens).
+  OPENAI_IMAGE_STREAM: bool,
   OPENAI_TIMEOUT_MS: z.coerce.number().int().positive().default(180_000),
   // Optional pricing inputs for cost estimates (USD per 1M tokens). Leave empty until verified on the pricing page.
   OPENAI_IMAGE_INPUT_USD_PER_MTOK: z.coerce.number().nonnegative().optional(),
@@ -47,6 +49,8 @@ const schema = z.object({
   RESEND_API_KEY: z.string().optional(),
   EMAIL_FROM: z.string().default("AI Character Studio <no-reply@example.com>"),
 
+  // Comma-separated emails that become admin + beta when they verify (owner bootstrap).
+  ADMIN_EMAILS: z.string().default(""),
   // Ops
   WORKER_CONCURRENCY: z.coerce.number().int().min(1).max(32).default(2),
   SESSION_TTL_DAYS: z.coerce.number().int().min(1).max(90).default(30),

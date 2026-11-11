@@ -17,7 +17,7 @@ export function imageProvider(): ImageProvider {
     cached = new FakeImageProvider();
   } else {
     if (!e.OPENAI_API_KEY) throw new AppError("provider_not_configured", "Image generation is not configured yet (OPENAI_API_KEY missing).");
-    cached = new OpenAIImageProvider({ apiKey: e.OPENAI_API_KEY, model: e.OPENAI_IMAGE_MODEL, timeoutMs: e.OPENAI_TIMEOUT_MS });
+    cached = new OpenAIImageProvider({ apiKey: e.OPENAI_API_KEY, model: e.OPENAI_IMAGE_MODEL, timeoutMs: e.OPENAI_TIMEOUT_MS, stream: e.OPENAI_IMAGE_STREAM });
   }
   return cached;
 }

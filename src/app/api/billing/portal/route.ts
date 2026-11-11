@@ -1,4 +1,4 @@
-import { route, requireUser } from "@/server/http";
+import { route, requireUser, publicBaseUrl } from "@/server/http";
 import { createPortalSession } from "@/server/billing";
 
-export const POST = route(async (req) => createPortalSession(await requireUser(req)));
+export const POST = route(async (req) => createPortalSession(await requireUser(req), publicBaseUrl(req)));

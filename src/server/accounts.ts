@@ -53,6 +53,15 @@ export async function signup(input: z.input<typeof signupSchema>) {
   return user;
 }
 
+/** Dev convenience: with the console mailer outside production, return the verification link so the UI can show it. */
+export async function devVerificationUrl(email: string): Promise<string | null> {
+  const e = env();
+  if (e.EMAIL_TRANSPORT !== "console" || e.APP_ENV === "production" || e.APP_ENV === "staging") return null;
+  const m = await one<{ body_text: string }>(`SELECT body_text FROM email_outbox WHERE lower(to_email)=lower($1) ORDER BY created_at DESC LIMIT 1`, [email]);
+  const token = m && /token=([^\s]+)/.exec(m.body_text)?.[1];
+  return token ? `/verify-email?token=${token}` : null;
+}
+
 export async function sendVerificationEmail(userId: string, email: string) {
   const token = randomToken();
   await q(`INSERT INTO email_tokens (user_id, purpose, token_hash, expires_at) VALUES ($1,'verify_email',$2, now() + interval '24 hours')`, [userId, sha256(token)]);
@@ -77,6 +86,12 @@ export async function verifyEmail(token: string) {
     const u = await one<{ email_canonical: string; email_verified_at: Date | null }>(`SELECT email_canonical, email_verified_at FROM users WHERE id=$1 FOR UPDATE`, [t.user_id], c);
     if (!u) throw new AppError("not_found", "User not found");
     if (!u.email_verified_at) await c.query(`UPDATE users SET email_verified_at=now(), updated_at=now() WHERE id=$1`, [t.user_id]);
+    const admins = env().ADMIN_EMAILS.split(",").map((x) => x.trim().toLowerCase()).filter(Boolean);
+    const email = await one<{ email: string }>(`SELECT email FROM users WHERE id=$1`, [t.user_id], c);
+    if (email && admins.includes(email.email.toLowerCase())) {
+      await c.query(`UPDATE users SET is_admin=true, beta_allowlisted=true WHERE id=$1`, [t.user_id]);
+      await audit(null, "user.bootstrap_admin", `user:${t.user_id}`, {}, c);
+    }
     let trialGranted = 0;
     // Stored as a hash so no plaintext email survives account deletion.
     const claim = await one(`INSERT INTO trial_claims (email_canonical) VALUES ($1) ON CONFLICT DO NOTHING RETURNING 1 AS ok`, [sha256(`trial:${u.email_canonical}`)], c);

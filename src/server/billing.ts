@@ -62,7 +62,7 @@ async function activeSubscription(workspaceId: string) {
 
 export const checkoutSchema = z.object({ planKey: z.enum(["creator", "pro", "agency"]), interval: z.enum(["month", "year"]) });
 
-export async function createSubscriptionCheckout(user: SessionUser, input: z.input<typeof checkoutSchema>) {
+export async function createSubscriptionCheckout(user: SessionUser, input: z.input<typeof checkoutSchema>, baseUrl = env().APP_URL) {
   const { planKey, interval } = checkoutSchema.parse(input);
   if (!user.emailVerified) throw new AppError("email_not_verified", "Verify your email before subscribing.");
   if (await activeSubscription(user.workspaceId)) throw new AppError("conflict", "You already have a subscription. Use Manage billing to change plans.");
@@ -77,8 +77,8 @@ export async function createSubscriptionCheckout(user: SessionUser, input: z.inp
     line_items: [{ price, quantity: 1 }],
     subscription_data: { metadata: { workspaceId: user.workspaceId, planKey } },
     metadata: { workspaceId: user.workspaceId, kind: "subscription", planKey },
-    success_url: `${env().APP_URL}/billing?checkout=success`,
-    cancel_url: `${env().APP_URL}/pricing?checkout=canceled`,
+    success_url: `${baseUrl}/billing?checkout=success`,
+    cancel_url: `${baseUrl}/pricing?checkout=canceled`,
     automatic_tax: { enabled: process.env.STRIPE_AUTOMATIC_TAX === "true" },
     customer_update: process.env.STRIPE_AUTOMATIC_TAX === "true" ? { address: "auto" } : undefined,
   });
@@ -88,7 +88,7 @@ export async function createSubscriptionCheckout(user: SessionUser, input: z.inp
 
 export const topupSchema = z.object({ packKey: z.string().max(40) });
 
-export async function createTopupCheckout(user: SessionUser, input: z.input<typeof topupSchema>) {
+export async function createTopupCheckout(user: SessionUser, input: z.input<typeof topupSchema>, baseUrl = env().APP_URL) {
   const { packKey } = topupSchema.parse(input);
   const plan = await getPlan(user.planKey);
   if (!plan.allows_topups) throw new AppError("plan_required", "Top-ups are available on paid plans.");
@@ -105,17 +105,17 @@ export async function createTopupCheckout(user: SessionUser, input: z.input<type
     payment_intent_data: { metadata: meta },
     metadata: meta,
     invoice_creation: { enabled: true },
-    success_url: `${env().APP_URL}/billing?topup=success`,
-    cancel_url: `${env().APP_URL}/billing?topup=canceled`,
+    success_url: `${baseUrl}/billing?topup=success`,
+    cancel_url: `${baseUrl}/billing?topup=canceled`,
     automatic_tax: { enabled: process.env.STRIPE_AUTOMATIC_TAX === "true" },
   });
   return { url: s.url };
 }
 
-export async function createPortalSession(user: SessionUser) {
+export async function createPortalSession(user: SessionUser, baseUrl = env().APP_URL) {
   const existing = await one<{ stripe_customer_id: string }>(`SELECT stripe_customer_id FROM billing_customers WHERE workspace_id=$1`, [user.workspaceId]);
   if (!existing) throw new AppError("not_found", "No billing account yet.");
-  const s = await stripe().billingPortal.sessions.create({ customer: existing.stripe_customer_id, return_url: `${env().APP_URL}/billing` });
+  const s = await stripe().billingPortal.sessions.create({ customer: existing.stripe_customer_id, return_url: `${baseUrl}/billing` });
   return { url: s.url };
 }
 
