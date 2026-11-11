@@ -50,7 +50,7 @@ Status legend: `[x]` done and tested (fake provider / Stripe mock) · `[~]` buil
 - [x] Credit quotes (immutable, expiring), atomic reserve / settle / release, ledger as source of truth
 - [x] Per-job usage + provider cost accounting, cost hard-stop per job type
 - [x] Ownership-checked download, asset deletion (soft delete + object removal)
-- [~] **Gate:** one end-to-end *real* OpenAI image job — needs `OPENAI_API_KEY` and network access to `api.openai.com`
+- [x] **Gate:** one end-to-end *real* OpenAI image job (`npm run provider:check`, 2026-11-11)
 
 ## Phase 1 — Paid MVP
 1. Accounts

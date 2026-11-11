@@ -29,7 +29,7 @@ _Last updated: 2026-11-11_
 - The upgrade allowance top-up depended on grant timestamps and over-granted when the billing anchor moved (found by e2e, regression test added).
 
 ## Blockers (need owner input)
-1. **Real image generation not yet proven.** No `OPENAI_API_KEY`, and this build sandbox cannot reach `api.openai.com` or `developers.openai.com`. Model capabilities were verified from the official SDK's bundled docs. Phase 0's gate is open until one real job runs.
+1. ~~Real image generation~~ **Phase 0 gate passed (2026-11-11)** with `npm run provider:check`: a real `gpt-image-2` text-to-image (synthetic portrait), then upload with real OpenAI moderation → 3-credit quote → reservation → worker edit → private output → settlement 15→12 → usage recorded. Note: this sandbox's proxy cuts requests at about 30s, so `OPENAI_IMAGE_STREAM=true` is set locally; production hosts don't need it. Output cost is still unpriced until `OPENAI_IMAGE_*_USD_PER_MTOK` are filled in.
 2. ~~Stripe test mode~~ **Verified against the real Stripe test API (2026-11-11)** with `npm run stripe:check`: 9 test prices created by `npm run stripe:setup`, real Checkout Sessions, and real events for subscribe (215), proration upgrade (665), top-up (765), partial refund (715), replay of 27 events (no-op) and cancel → Free. Still to do once deployed: a dashboard webhook endpoint with its own signing secret, and one checkout completed in a browser on checkout.stripe.com.
 3. Pricing inputs for cost reports (`OPENAI_IMAGE_*_USD_PER_MTOK`) must be copied from the current pricing page.
 4. Legal templates need counsel review. Brand, domain, support email and legal entity are placeholders.
