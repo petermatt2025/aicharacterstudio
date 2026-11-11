@@ -13,7 +13,7 @@ export function imageProvider(): ImageProvider {
   if (cached) return cached;
   const e = env();
   if (e.IMAGE_PROVIDER === "fake") {
-    if (e.NODE_ENV === "production") throw new Error("Fake provider is forbidden in production");
+    if (e.APP_ENV === "production" || e.APP_ENV === "staging") throw new Error("Fake provider is forbidden in production");
     cached = new FakeImageProvider();
   } else {
     if (!e.OPENAI_API_KEY) throw new AppError("provider_not_configured", "Image generation is not configured yet (OPENAI_API_KEY missing).");

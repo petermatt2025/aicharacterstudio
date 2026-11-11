@@ -102,6 +102,16 @@ describe("Stripe webhooks", () => {
     expect((await checkInvariants(u.workspaceId))!.balance).toBe(15 + 650); // 200 + 450 difference
   });
 
+  it("upgrade top-up is correct even when Stripe resets the billing anchor", async () => {
+    const { u, customer, subId } = await subscribedUser();
+    await deliver("invoice.paid", invoice(subId));
+    subscription(subId, customer, u.workspaceId, PRICES.proM, "active", Math.floor(Date.now() / 1000) + 5);
+    await deliver("customer.subscription.updated", subs.get(subId));
+    await deliver("invoice.paid", invoice(subId, "subscription_update"));
+    await deliver("invoice.paid", invoice(subId, "subscription_update")); // a second proration invoice adds nothing
+    expect((await checkInvariants(u.workspaceId))!.balance).toBe(15 + 650);
+  });
+
   it("ignores stale out-of-order subscription events", async () => {
     const { u, customer, subId } = await subscribedUser();
     const canceled = subscription(subId, customer, u.workspaceId, PRICES.creatorM, "canceled");

@@ -2,6 +2,8 @@ import "server-only";
 import crypto from "node:crypto";
 import { z } from "zod";
 import { CONSENT_STATEMENTS, CONSENT_STATEMENT_VERSION } from "@/lib/catalog";
+import { ALLOWED_CONSENT, type ConsentSubject } from "@/lib/consent";
+export { ALLOWED_CONSENT };
 import type { SessionUser } from "./accounts";
 import { one, q, tx } from "./db";
 import { env } from "./env";
@@ -14,19 +16,11 @@ import { storage } from "./storage";
 import { sha256 } from "./crypto";
 import { track } from "./audit";
 
-export const ASSET_KINDS = ["character", "product", "outfit", "background", "style", "other"] as const;
-export type UploadKind = (typeof ASSET_KINDS)[number];
-export type ConsentSubject = "self" | "third_party_with_permission" | "no_identifiable_people" | "owned_product_or_asset";
+import { ASSET_KINDS, type UploadKind } from "@/lib/consent";
+export { ASSET_KINDS, type UploadKind };
+export type { ConsentSubject };
 
-/** Which consent statements are acceptable per upload kind. People-bearing kinds need person consent. */
-export const ALLOWED_CONSENT: Record<UploadKind, ConsentSubject[]> = {
-  character: ["self", "third_party_with_permission"],
-  product: ["owned_product_or_asset", "no_identifiable_people", "self", "third_party_with_permission"],
-  outfit: ["owned_product_or_asset", "no_identifiable_people", "self", "third_party_with_permission"],
-  background: ["no_identifiable_people", "owned_product_or_asset", "self", "third_party_with_permission"],
-  style: ["no_identifiable_people", "owned_product_or_asset", "self", "third_party_with_permission"],
-  other: ["no_identifiable_people", "owned_product_or_asset", "self", "third_party_with_permission"],
-};
+
 
 export type AssetRow = {
   id: string;

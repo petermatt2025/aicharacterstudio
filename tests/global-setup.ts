@@ -8,7 +8,7 @@ export default async function setup() {
   await c.query("DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;");
   await c.end();
   process.env.DATABASE_URL = url;
-  process.env.NODE_ENV = "test";
+  (process.env as Record<string, string>).NODE_ENV = "test";
   const { runMigrations } = await import("../src/server/migrate");
   const { seedCatalog } = await import("../src/server/seed");
   const { closePool } = await import("../src/server/db");

@@ -46,7 +46,7 @@ export async function moderate(input: { text?: string; imageDataUrl?: string }):
     return { flagged: !!result?.flagged, categories, source: "openai" };
   } catch (err) {
     log("error", "moderation.failed", { error: (err as Error).message });
-    if (e.NODE_ENV === "production") return { flagged: true, categories: ["moderation_unavailable"], source: "openai" };
+    if (e.APP_ENV === "production" || e.APP_ENV === "staging") return { flagged: true, categories: ["moderation_unavailable"], source: "openai" };
     return base;
   }
 }

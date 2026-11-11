@@ -1,7 +1,7 @@
 # AI Character Studio — Implementation Plan
 
 Source of truth: `AI_CHARACTER_STUDIO_MASTER_BUILD.md`. This plan turns it into checklists.
-Status legend: `[x]` done and tested · `[~]` built, needs live credentials to verify · `[ ]` not started.
+Status legend: `[x]` done and tested (fake provider / Stripe mock) · `[~]` built, needs live credentials to verify · `[ ]` not started.
 
 ## Architecture summary
 
@@ -42,7 +42,7 @@ Status legend: `[x]` done and tested · `[~]` built, needs live credentials to v
 - [x] Next.js + TS + Tailwind, ESLint, Vitest, typecheck scripts
 - [x] SQL migrations + runner; seed of plans, 30 features, entitlements, credit rules
 - [x] Auth: signup, login, logout, sessions, email verification, CSRF origin check
-- [x] Private storage adapter (local + S3), upload validation (type, size, pixels), EXIF strip, thumbnails
+- [x] Private storage adapter (local + S3; S3 path not exercised without a bucket), upload validation (type, size, pixels), EXIF strip, thumbnails
 - [x] Consent capture on upload (self / authorized third party) + consent receipts
 - [x] Durable Postgres job queue + worker with lease, retries, backoff, stale-lease recovery
 - [x] `ImageProvider` interface, OpenAI adapter, fake adapter (tests only), capability map
@@ -71,8 +71,9 @@ Status legend: `[x]` done and tested · `[~]` built, needs live credentials to v
    - [x] AI Scene Director (brief → structured prompt, editable)
    - Tools are `beta` (allowlist) until the live-provider gate passes, then admin flips them to `live`.
 5. Billing (Stripe **test mode**)
-   - [~] Checkout for subscriptions (monthly/annual) and top-ups; Billing Portal
-   - [x] Webhooks: signature verification, idempotency, subscription sync, invoice.paid grants, payment failure, refunds (credit reversal clamped ≥ 0), deletion
+   - [~] Checkout for subscriptions (monthly/annual) and top-ups; Billing Portal (verified against a local Stripe mock; needs test keys)
+   - [x] Webhooks: signature verification, idempotency, subscription sync, invoice.paid grants, payment failure, top-up refunds/disputes (credit reversal clamped ≥ 0), deletion
+   - [ ] Automatic credit reversal for refunded subscription invoices (manual admin adjustment for now)
    - [x] Monthly allocation for annual plans; credit expiry sweep
 6. Gates, admin, limits
    - [x] Server-side entitlements by plan × release state × allowlist

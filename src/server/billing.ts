@@ -33,7 +33,13 @@ export function stripe(): StripeLike {
   if (key.startsWith("sk_live_") || key.startsWith("rk_live_")) {
     if (!env().STRIPE_ALLOW_LIVE_MODE) throw new AppError("billing_live_mode_blocked", "Live Stripe keys are blocked until the owner approves real payments.");
   }
-  client ??= new Stripe(key, { maxNetworkRetries: 2, timeout: 20_000, appInfo: { name: "ai-character-studio" } });
+  const base = env().STRIPE_API_BASE ? new URL(env().STRIPE_API_BASE!) : null;
+  client ??= new Stripe(key, {
+    maxNetworkRetries: 2,
+    timeout: 20_000,
+    appInfo: { name: "ai-character-studio" },
+    ...(base ? { host: base.hostname, port: Number(base.port), protocol: base.protocol.replace(":", "") as "http" | "https" } : {}),
+  });
   return client;
 }
 
@@ -272,8 +278,10 @@ async function onInvoicePaid(c: pg.PoolClient, inv: Stripe.Invoice): Promise<boo
   const periodEnd = row.billing_interval === "month" ? row.current_period_end : addMonths(row.current_period_start, 1, row.current_period_end);
   const source = row.billing_interval === "month" ? "subscription" : "annual_allocation";
   const already = await one<{ n: number }>(
-    `SELECT COALESCE(sum(amount),0)::int AS n FROM credit_grants WHERE workspace_id=$1 AND source IN ('subscription','annual_allocation') AND created_at >= $2 AND revoked_at IS NULL`,
-    [row.workspace_id, row.current_period_start],
+    // Allowance already granted for the live period = unexpired, unrevoked plan grants (previous periods are expired on renewal).
+    `SELECT COALESCE(sum(amount),0)::int AS n FROM credit_grants WHERE workspace_id=$1 AND source IN ('subscription','annual_allocation')
+        AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at > now())`,
+    [row.workspace_id],
     c,
   );
   const isUpdate = inv.billing_reason === "subscription_update";

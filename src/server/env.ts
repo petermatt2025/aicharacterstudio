@@ -8,6 +8,8 @@ const bool = z
 
 const schema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
+  // Deployment environment. Safety guards key off APP_ENV=production (defaults to NODE_ENV).
+  APP_ENV: z.enum(["development", "test", "e2e", "staging", "production"]).optional(),
   APP_URL: z.string().url().default("http://localhost:3000"),
   APP_NAME: z.string().default("AI Character Studio"),
   DATABASE_URL: z.string().min(1).default("postgres://localhost:5432/acs_dev"),
@@ -38,6 +40,7 @@ const schema = z.object({
   STRIPE_SECRET_KEY: z.string().optional(),
   STRIPE_WEBHOOK_SECRET: z.string().optional(),
   STRIPE_ALLOW_LIVE_MODE: bool,
+  STRIPE_API_BASE: z.string().url().optional(), // local Stripe mock for e2e only; ignored in production
 
   // Email
   EMAIL_TRANSPORT: z.enum(["console", "resend"]).default("console"),
@@ -53,7 +56,7 @@ const schema = z.object({
   MAX_UPLOAD_BYTES: z.coerce.number().int().positive().default(15 * 1024 * 1024),
 });
 
-export type Env = z.infer<typeof schema>;
+export type Env = z.infer<typeof schema> & { APP_ENV: "development" | "test" | "e2e" | "staging" | "production" };
 
 let cached: Env | null = null;
 
@@ -63,12 +66,13 @@ export function env(): Env {
   if (!parsed.success) {
     throw new Error(`Invalid environment: ${parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ")}`);
   }
-  const e = parsed.data;
-  if (e.NODE_ENV === "production") {
-    if (e.IMAGE_PROVIDER === "fake") throw new Error("IMAGE_PROVIDER=fake is forbidden in production");
+  const e = { ...parsed.data, APP_ENV: parsed.data.APP_ENV ?? parsed.data.NODE_ENV } as Env;
+  if (e.APP_ENV === "production" || e.APP_ENV === "staging") {
+    if (e.IMAGE_PROVIDER === "fake") throw new Error("IMAGE_PROVIDER=fake is forbidden in staging/production");
     if (e.STORAGE_DRIVER === "local") throw new Error("STORAGE_DRIVER=local is forbidden in production");
     if (e.MODERATION_PROVIDER === "baseline") throw new Error("MODERATION_PROVIDER=baseline is forbidden in production");
     if (e.EMAIL_TRANSPORT === "console") throw new Error("EMAIL_TRANSPORT=console is forbidden in production");
+    if (e.STRIPE_API_BASE) throw new Error("STRIPE_API_BASE is for local testing only");
   }
   cached = e;
   return e;
