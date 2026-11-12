@@ -31,7 +31,7 @@ export default async function Admin({ searchParams }: { searchParams: Promise<{ 
   const e = env();
   return (
     <div className="mx-auto max-w-7xl space-y-6">
-      <PageHeader title="Admin" sub={`Last ${days} days · provider ${e.IMAGE_PROVIDER}/${e.OPENAI_IMAGE_MODEL} · Stripe ${billingConfigured() ? (e.STRIPE_SECRET_KEY?.startsWith("sk_live") ? "LIVE" : "test mode") : "not configured"}`} actions={<div className="flex gap-4 text-sm"><a className="text-accent" href="/admin/status">System status →</a><a className="text-accent" href={`/admin?days=${days === 30 ? 7 : 30}`}>Show {days === 30 ? 7 : 30} days</a></div>} />
+      <PageHeader title="Admin" sub={`Last ${days} days · provider ${e.IMAGE_PROVIDER}/${e.OPENAI_IMAGE_MODEL} · Stripe ${billingConfigured() ? (/^(sk|rk)_live_/.test(e.STRIPE_SECRET_KEY ?? "") ? "LIVE" : "test mode") : "not configured"}`} actions={<div className="flex gap-4 text-sm"><a className="text-accent" href="/admin/status">System status →</a><a className="text-accent" href={`/admin?days=${days === 30 ? 7 : 30}`}>Show {days === 30 ? 7 : 30} days</a></div>} />
       {!providerConfigured() && <Notice tone="warn">Image provider not configured: quotes will fail with provider_not_configured.</Notice>}
       {e.IMAGE_PROVIDER === "fake" && <Notice tone="warn">FAKE image provider active (test images only). Never enable in production.</Notice>}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
