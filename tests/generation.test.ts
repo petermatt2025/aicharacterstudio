@@ -72,11 +72,11 @@ describe("generation pipeline", () => {
     const c = await upload(u);
     const start = (await balanceOf(u.workspaceId)).balance;
     const { quote, job } = await run(u, { featureKey: "character_angles", references: [{ assetId: c.id, role: "character" }], presetKeys: ["front", "profile", "three_quarter", "low"] });
-    expect(quote.credits).toBe(10); // angle sheet: 10 credits per 4 outputs
+    expect(quote.credits).toBe(12); // angle sheet: 12 credits per 4 outputs
     expect(job.status).toBe("succeeded");
     expect(job.outputs).toHaveLength(4);
-    expect(job.creditsCharged).toBe(10);
-    expect((await balanceOf(u.workspaceId)).balance).toBe(start - 10);
+    expect(job.creditsCharged).toBe(12);
+    expect((await balanceOf(u.workspaceId)).balance).toBe(start - 12);
     const { bytes } = await readAssetBytes(u, job.outputs[0]!.assetId, "original");
     expect((await inspect(bytes)).width).toBeGreaterThan(0);
     const usage = await one<{ n: number }>(`SELECT count(*)::int AS n FROM usage_events WHERE job_id=$1 AND success`, [job.id]);
@@ -168,11 +168,11 @@ describe("generation pipeline", () => {
     const c = await upload(u);
     const start = (await balanceOf(u.workspaceId)).balance;
     const { quote, job } = await run(u, { featureKey: "character_angles", references: [{ assetId: c.id, role: "character" }], presetKeys: ["front", "profile", "three_quarter", "low"], prompt: "[[fake:fail-after:3]]" });
-    expect(quote.credits).toBe(10);
+    expect(quote.credits).toBe(12);
     expect(job.status).toBe("partial");
     expect(job.outputsDelivered).toBe(3);
-    expect(job.creditsCharged).toBe(7); // floor(10 * 3/4)
-    expect((await balanceOf(u.workspaceId)).balance).toBe(start - 7);
+    expect(job.creditsCharged).toBe(9); // floor(12 * 3/4)
+    expect((await balanceOf(u.workspaceId)).balance).toBe(start - 9);
   });
 
   it("retries are exhausted after max attempts and credits returned", async () => {

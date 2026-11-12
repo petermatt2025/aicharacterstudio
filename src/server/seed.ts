@@ -5,7 +5,7 @@ import { pool, tx } from "./db";
 export const DEFAULT_SETTINGS: Record<string, unknown> = {
   generation_enabled: true, // global kill switch
   global_daily_cost_cap_usd: 50, // hard stop for all new jobs when the 24h provider spend exceeds this
-  workspace_monthly_cost_cap_usd: 40, // per-workspace provider spend hard stop (30 days)
+  workspace_monthly_cost_cap_usd: 75, // per-workspace provider spend hard stop (30 days)
   quote_ttl_seconds: 600,
   rate_limit_quotes_per_minute: 20,
   rate_limit_uploads_per_hour: 60,

@@ -193,16 +193,16 @@ async function main() {
   await page.getByRole("button", { name: "Review cost" }).click();
   await page.getByTestId("quote").waitFor();
   const quoteText = await page.getByTestId("quote").innerText();
-  check(/10\s*credits/.test(quoteText), "quote shows 10 credits for 4 angles before generating");
+  check(/12\s*credits/.test(quoteText), "quote shows 12 credits for 4 angles before generating");
   await page.screenshot({ path: path.join(SHOTS, "03-studio-quote.png"), fullPage: true });
-  await page.getByRole("button", { name: /Generate for 10 credits/ }).click();
+  await page.getByRole("button", { name: /Generate for 12 credits/ }).click();
   await page.getByTestId("job-panel").getByText("succeeded").waitFor({ timeout: 60000 });
   const imgs = await page.getByTestId("job-panel").locator("img").count();
   check(imgs === 4, `4 images delivered (${imgs})`);
   await page.screenshot({ path: path.join(SHOTS, "04-studio-results.png"), fullPage: true });
   await page.reload();
   const credits2 = await page.getByTestId("nav-credits").innerText();
-  check(credits2 === "205", `credits debited after generation: ${credits2}`);
+  check(credits2 === "203", `credits debited after generation: ${credits2}`);
 
   // 7. Download.
   const [dl] = await Promise.all([page.waitForEvent("download"), page.getByTestId("job-panel").getByRole("link", { name: "Download" }).first().click()]).catch(async () => {
@@ -220,7 +220,7 @@ async function main() {
   await deliver("invoice.paid", { id: `in_up_${Date.now()}`, object: "invoice", billing_reason: "subscription_update", amount_paid: 3000, parent: { subscription_details: { subscription: subId } } });
   await page.goto(`${BASE}/billing`);
   const credits3 = await page.getByTestId("nav-credits").innerText();
-  check(credits3 === "655", `upgraded to Pro with prorated allowance top-up: ${credits3}`);
+  check(credits3 === "653", `upgraded to Pro with prorated allowance top-up: ${credits3}`);
   await page.screenshot({ path: path.join(SHOTS, "05-billing.png"), fullPage: true });
 
   // 9. Cross-tenant isolation.

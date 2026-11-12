@@ -94,9 +94,9 @@ describe("sizes, credits, prompts", () => {
     expect(computeCredits({ tool: t.environment_switch!, rules, refs: 1, quality: "standard", identityStrength: "balanced", outputs: 2, multiplier: 1 }).credits).toBe(6);
     expect(computeCredits({ tool: t.environment_switch!, rules, refs: 1, quality: "high", identityStrength: "balanced", outputs: 1, multiplier: 1 }).credits).toBe(5);
     expect(computeCredits({ tool: t.reference_mixer!, rules, refs: 3, quality: "standard", identityStrength: "balanced", outputs: 1, multiplier: 1.5 }).credits).toBe(6);
-    expect(computeCredits({ tool: t.character_angles!, rules, refs: 1, quality: "standard", identityStrength: "balanced", outputs: 4, multiplier: 1 }).credits).toBe(10);
+    expect(computeCredits({ tool: t.character_angles!, rules, refs: 1, quality: "standard", identityStrength: "balanced", outputs: 4, multiplier: 1 }).credits).toBe(12);
     expect(computeCredits({ tool: t.character_angles!, rules, refs: 1, quality: "standard", identityStrength: "balanced", outputs: 1, multiplier: 1 }).credits).toBe(3);
-    expect(computeCredits({ tool: t.photoshoot!, rules, refs: 1, quality: "standard", identityStrength: "balanced", outputs: 12, multiplier: 1 }).credits).toBe(24);
+    expect(computeCredits({ tool: t.photoshoot!, rules, refs: 1, quality: "standard", identityStrength: "balanced", outputs: 12, multiplier: 1 }).credits).toBe(36);
   });
 
   it("Scene Director builds a structured, editable prompt", () => {

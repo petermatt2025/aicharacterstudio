@@ -99,8 +99,8 @@ export const CREDIT_RULES: Array<{ key: string; label: string; credits: number; 
   { key: "reference_edit", label: "Reference edit, one input", credits: 3, perOutputs: 1 },
   { key: "multi_reference", label: "Multi-reference composition (2-4 inputs)", credits: 4, perOutputs: 1 },
   { key: "identity_strict", label: "Advanced identity-preserving generation", credits: 5, perOutputs: 1 },
-  { key: "angle_sheet", label: "Character angle sheet", credits: 10, perOutputs: 4 },
-  { key: "photoshoot", label: "One-click photoshoot", credits: 24, perOutputs: 12 },
+  { key: "angle_sheet", label: "Character angle sheet", credits: 12, perOutputs: 4 },
+  { key: "photoshoot", label: "One-click photoshoot", credits: 36, perOutputs: 12 },
   { key: "upscale", label: "Upscale / enhance", credits: 2, perOutputs: 1 },
 ];
 
