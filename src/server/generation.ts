@@ -157,6 +157,10 @@ export async function createQuote(user: SessionUser, input: z.input<typeof quote
   if (presetKeys.length < tool.minPresets || presetKeys.length > tool.maxPresets) {
     throw new AppError("validation_failed", `Choose between ${tool.minPresets} and ${tool.maxPresets} ${tool.presetLabel.toLowerCase()}.`);
   }
+  for (const k of presetKeys) {
+    const need = tool.presets.find((p) => p.key === k)?.requires;
+    if (need && !refs.some((r) => r.role === need)) throw new AppError("validation_failed", `Upload a ${need} photo to use "${tool.presets.find((p) => p.key === k)!.label}".`);
+  }
   if (tool.promptRequired && req.prompt.trim().length < 3) throw new AppError("validation_failed", "Please describe what you want.");
   if (tool.presetMode === "shots" && presetKeys.length === 0 && req.prompt.trim().length < 3) throw new AppError("validation_failed", `Pick at least one of the ${tool.presetLabel.toLowerCase()} or describe a scene.`);
 

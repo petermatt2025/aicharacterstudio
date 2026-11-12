@@ -22,6 +22,15 @@ const FEATURE_FRAME: Record<string, string> = {
   reference_mixer: "Create one coherent photorealistic image that combines the provided references into a single natural scene.",
   ugc_ads: "Create an illustrative, synthetic UGC-style advertising concept photo. It is a concept image, not a real customer photo.",
   photoshoot: "Create one photo from a professional photoshoot series of the same person.",
+  expressions: "Create a photorealistic portrait of the same person showing a specific facial expression. Keep framing, lighting and background consistent across the set.",
+  outfit_swap: "Create a photorealistic photo of the same person wearing a different outfit. Change only the clothing; keep the face and body proportions.",
+  style_transform: "Re-render the same person in a specific artistic style while keeping them recognizable.",
+  poses: "Create a photorealistic photo of the same person in a specific body pose.",
+  headshots: "Create a professional, photorealistic studio-quality headshot of the same person.",
+  ai_twin: "Create a clean, photorealistic identity reference photo of the same person for a reusable reference pack. Neutral styling, accurate features, no filters.",
+  thumbnails: "Design a high-impact video thumbnail featuring the same person. If the user direction contains text in quotes, render exactly that text, large and legible, spelled correctly.",
+  social_content: "Design a polished social media graphic featuring the same person. If the user direction contains text in quotes, render exactly that text, legible and spelled correctly.",
+  memes: "Create an original, good-natured meme image starring the same person. If the user direction contains a caption in quotes, render exactly that caption in bold meme lettering.",
 };
 
 /**

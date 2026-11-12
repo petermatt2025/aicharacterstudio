@@ -27,10 +27,10 @@ export type FeatureSeed = {
   description: string;
 };
 
-// Phase-1 tools start as `beta` (allowlisted users + admins). They are flipped to `live` by an admin
+// Phase-1 and Phase-2 tools start as `beta` (allowlisted users + admins). They are flipped to `live` by an admin
 // only after the real-provider gate passes. Phase 2 tools are teasers; phases 3-4 are roadmap only.
 const p1: ReleaseState = "beta";
-const p2: ReleaseState = "coming_soon";
+const p2: ReleaseState = "beta"; // Phase 2 tools implemented 2026-11-12 (beta until each passes a real-provider check)
 const p34: ReleaseState = "planned";
 
 export const FEATURES: FeatureSeed[] = [

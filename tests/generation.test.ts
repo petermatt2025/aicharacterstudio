@@ -41,7 +41,7 @@ describe("feature gates (server-side)", () => {
     const u = await makeUser({ plan: "agency", beta: false, credits: 50 });
     const c = await upload(u);
     await expect(createQuote(u, { featureKey: "character_angles", references: [{ assetId: c.id, role: "character" }], presetKeys: ["front"] })).rejects.toMatchObject({ code: "feature_unavailable" });
-    await expect(createQuote(u, { featureKey: "expressions", references: [{ assetId: c.id, role: "character" }] })).rejects.toMatchObject({ code: "feature_unavailable" });
+    await expect(createQuote(u, { featureKey: "before_after", references: [{ assetId: c.id, role: "character" }] })).rejects.toMatchObject({ code: "feature_unavailable" });
     // Even an admin flipping an unimplemented tool to live cannot make it usable.
     await q(`UPDATE features SET release_state='live' WHERE key='storyboards'`);
     const admin = await makeUser({ plan: "agency", admin: true });
@@ -408,5 +408,52 @@ describe("tools", () => {
     } finally {
       await q(`DELETE FROM plan_entitlements WHERE plan_key='free' AND feature_key='environment_switch'`);
     }
+  });
+});
+
+describe("phase 2 creator tools", () => {
+  beforeAll(async () => {
+    await q(`UPDATE features SET release_state='beta' WHERE key IN ('expressions','outfit_swap','style_transform','poses','headshots','ai_twin','thumbnails','social_content','memes')`);
+  });
+
+  const cases: Array<[string, string[], string]> = [
+    ["expressions", ["happy", "surprised"], ""],
+    ["outfit_swap", ["business"], ""],
+    ["style_transform", ["anime"], ""],
+    ["poses", ["standing", "walking"], ""],
+    ["headshots", ["corporate"], ""],
+    ["ai_twin", ["neutral_front", "left"], ""],
+    ["thumbnails", ["reaction"], 'AI tools video, headline "5 AI TOOLS"'],
+    ["social_content", ["story"], 'morning habits, headline "3 HABITS"'],
+    ["memes", ["top_bottom"], 'client feedback joke, caption "QUICK CHANGE?"'],
+  ];
+
+  it.each(cases)("%s quotes and generates one image per selection", async (featureKey, presetKeys, prompt) => {
+    const u = await makeUser({ plan: "pro", credits: 100 });
+    const c = await upload(u);
+    fakeCalls.length = 0;
+    const { quote, job } = await run(u, { featureKey, references: [{ assetId: c.id, role: "character" }], presetKeys, prompt });
+    expect(quote.outputs).toBe(presetKeys.length);
+    expect(job.status).toBe("succeeded");
+    expect(job.outputs).toHaveLength(presetKeys.length);
+    expect(fakeCalls[0]!.roles).toEqual(["character"]);
+    if (prompt) expect(fakeCalls[0]!.prompt).toContain(prompt);
+  });
+
+  it("text tools require a prompt, and 'Use outfit photo' requires an outfit upload", async () => {
+    const u = await makeUser({ plan: "pro", credits: 100 });
+    const c = await upload(u);
+    await expect(createQuote(u, { featureKey: "thumbnails", references: [{ assetId: c.id, role: "character" }], presetKeys: ["reaction"] })).rejects.toMatchObject({ code: "validation_failed" });
+    await expect(createQuote(u, { featureKey: "outfit_swap", references: [{ assetId: c.id, role: "character" }], presetKeys: ["reference"] })).rejects.toMatchObject({ code: "validation_failed" });
+    const outfit = await upload(u, "outfit");
+    const ok = await createQuote(u, { featureKey: "outfit_swap", references: [{ assetId: c.id, role: "character" }, { assetId: outfit.id, role: "outfit" }], presetKeys: ["reference"] });
+    expect(ok.outputs).toBe(1);
+  });
+
+  it("phase 2 tools respect plan tiers (AI Twin and Thumbnails need Pro)", async () => {
+    const creator = await makeUser({ plan: "creator", credits: 50 });
+    const c = await upload(creator);
+    await expect(createQuote(creator, { featureKey: "ai_twin", references: [{ assetId: c.id, role: "character" }], presetKeys: ["neutral_front"] })).rejects.toMatchObject({ code: "plan_required" });
+    await expect(createQuote(creator, { featureKey: "expressions", references: [{ assetId: c.id, role: "character" }], presetKeys: ["happy"] })).resolves.toHaveProperty("quoteId");
   });
 });
