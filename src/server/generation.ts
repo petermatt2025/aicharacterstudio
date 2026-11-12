@@ -147,7 +147,8 @@ export async function createQuote(user: SessionUser, input: z.input<typeof quote
   for (const r of refs) {
     const a = byId.get(r.assetId)!;
     if (a.moderation_status === "flagged") throw new AppError("moderation_blocked", "A reference image was flagged and can't be used.");
-    if (r.role === "character" && a.kind !== "character") throw new AppError("consent_required", "Only photos uploaded as Character (with person consent) can be used as a character reference.");
+    const personSlot = r.role === "character" || !!tool.slots.find((sl) => sl.role === r.role)?.person;
+    if (personSlot && a.kind !== "character") throw new AppError("consent_required", "Only photos uploaded as Character (with person consent) can be used for a person.");
     if (a.kind !== "output" && !a.consent_receipt_id) throw new AppError("consent_required", "A reference image is missing a rights confirmation.");
   }
 
@@ -158,6 +159,7 @@ export async function createQuote(user: SessionUser, input: z.input<typeof quote
     throw new AppError("validation_failed", `Choose between ${tool.minPresets} and ${tool.maxPresets} ${tool.presetLabel.toLowerCase()}.`);
   }
   for (const k of presetKeys) {
+    if (tool.presets.find((p) => p.key === k)?.needsPrompt && req.prompt.trim().length < 3) throw new AppError("validation_failed", "Describe the change you want for Magic edit.");
     const need = tool.presets.find((p) => p.key === k)?.requires;
     if (need && !refs.some((r) => r.role === need)) throw new AppError("validation_failed", `Upload a ${need} photo to use "${tool.presets.find((p) => p.key === k)!.label}".`);
   }

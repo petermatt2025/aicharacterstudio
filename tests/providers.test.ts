@@ -160,3 +160,11 @@ describe("Gemini image provider", () => {
     expect(() => new GeminiImageProvider({ apiKey: "k", model: "gemini-made-up", timeoutMs: 1 })).toThrow(/verified/);
   });
 });
+
+describe("image to prompt", () => {
+  it("is a special tool that can't be quoted as an image job", async () => {
+    const { SPECIAL_TOOLS, TOOLS } = await import("@/lib/tools");
+    expect(SPECIAL_TOOLS).toContain("image_to_prompt");
+    expect(TOOLS.image_to_prompt).toBeUndefined();
+  });
+});

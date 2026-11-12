@@ -57,9 +57,9 @@ export function Uploader({ kind, onUploaded, compact }: { kind: UploadKind; onUp
 }
 
 /** Choose an existing private asset of a kind, or upload a new one. */
-export function AssetPicker({ kind, assets, value, onChange, onUploaded, label }: { kind: UploadKind; assets: AssetLite[]; value: string | null; onChange: (id: string | null) => void; onUploaded: (a: AssetLite) => void; label: string }) {
+export function AssetPicker({ kind, assets, value, onChange, onUploaded, label, includeOutputs = false }: { kind: UploadKind; assets: AssetLite[]; value: string | null; onChange: (id: string | null) => void; onUploaded: (a: AssetLite) => void; label: string; includeOutputs?: boolean }) {
   const [open, setOpen] = useState(false);
-  const mine = assets.filter((a) => a.kind === kind);
+  const mine = assets.filter((a) => a.kind === kind || (includeOutputs && a.kind === "output"));
   const selected = assets.find((a) => a.id === value);
   return (
     <div className="space-y-2">

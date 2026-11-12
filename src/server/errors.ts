@@ -19,6 +19,7 @@ export type ErrorCode =
   | "unsupported_file"
   | "file_too_large"
   | "provider_not_configured"
+  | "provider_unavailable"
   | "provider_capability"
   | "cost_cap_reached"
   | "billing_not_configured"
@@ -47,6 +48,7 @@ const STATUS: Record<ErrorCode, number> = {
   unsupported_file: 415,
   file_too_large: 413,
   provider_not_configured: 503,
+  provider_unavailable: 503,
   provider_capability: 422,
   cost_cap_reached: 503,
   billing_not_configured: 503,

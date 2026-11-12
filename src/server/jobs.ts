@@ -4,7 +4,8 @@ import sharp from "sharp";
 import { one, q, tx } from "./db";
 import { settleReservation } from "./credits";
 import { imageProvider } from "./providers";
-import { ProviderError, type ImageProvider, type ReferenceRole } from "./providers/types";
+import { TOOLS } from "@/lib/tools";
+import { ProviderError, type AspectRatio, type ImageProvider, type ReferenceRole } from "./providers/types";
 import { applyWatermark, makeThumbnail, resizeLongEdge, sanitizeImage, EXT } from "./images";
 import { storage } from "./storage";
 import { moderate } from "./moderation";
@@ -63,6 +64,27 @@ async function heartbeat(jobId: string, workerId: string): Promise<{ owned: bool
   return { owned: !!r, cancel: !!r?.cancel_requested };
 }
 
+/**
+ * Outpaint prep: put the source image (first reference) in the center of a canvas with the target aspect ratio,
+ * filling the border with a heavily blurred stretch of the image as a placeholder the model replaces.
+ */
+async function outpaintCanvas(refs: Array<{ role: ReferenceRole; bytes: Buffer; mime: string; label?: string }>, aspect: AspectRatio) {
+  const [first, ...rest] = refs;
+  if (!first) return refs;
+  const meta = await sharp(first.bytes).metadata();
+  const w = meta.width ?? 1024;
+  const h = meta.height ?? 1024;
+  const [rw, rh] = aspect.split(":").map(Number) as [number, number];
+  // Smallest canvas with the target ratio that contains the whole image, plus ~12% so there is always room to extend.
+  let cw = Math.max(w, Math.round((h * rw) / rh));
+  let ch = Math.round((cw * rh) / rw);
+  if (ch < h) { ch = h; cw = Math.round((ch * rw) / rh); }
+  cw = Math.round(cw * 1.12); ch = Math.round(ch * 1.12);
+  const bg = await sharp(first.bytes).resize(cw, ch, { fit: "fill" }).blur(40).modulate({ brightness: 0.9 }).png().toBuffer();
+  const canvas = await sharp(bg).composite([{ input: await sharp(first.bytes).png().toBuffer(), left: Math.round((cw - w) / 2), top: Math.round((ch - h) / 2) }]).png().toBuffer();
+  return [{ ...first, bytes: canvas, mime: "image/png" }, ...rest];
+}
+
 /** Combine overflow references into one labeled sheet when the model accepts fewer images than provided. */
 async function collage(images: Array<{ role: ReferenceRole; bytes: Buffer }>): Promise<Buffer> {
   const cell = 768;
@@ -114,12 +136,15 @@ export async function processJob(job: JobRow, workerId: string, providerOverride
   if (inputs.length !== snap.references.length || inputs.some((i) => i.deleted_at)) {
     return finalize(job, workerId, { code: "reference_deleted", message: "A reference image was deleted before generation; credits returned." });
   }
-  let referenceImages = await Promise.all(inputs.map(async (i) => ({ role: i.role, bytes: await storage().get(i.storage_key), mime: i.mime })));
+  const slots = TOOLS[job.feature_key]?.slots ?? [];
+  let referenceImages = await Promise.all(
+    inputs.map(async (i) => ({ role: i.role, bytes: await storage().get(i.storage_key), mime: i.mime, label: slots.find((sl) => sl.role === i.role)?.promptLabel })),
+  );
   const caps = await provider.capabilities();
   if (referenceImages.length > caps.maxReferenceImages) {
     const keep = referenceImages.slice(0, Math.max(0, caps.maxReferenceImages - 1));
     const overflow = referenceImages.slice(keep.length);
-    referenceImages = [...keep, { role: "other", bytes: await collage(overflow), mime: "image/png" }];
+    referenceImages = [...keep, { role: "other", bytes: await collage(overflow), mime: "image/png", label: "REFERENCE SHEET: the remaining references combined into one labeled image." }];
   }
 
   const done = new Set((await q<{ output_index: number }>(`SELECT output_index FROM generation_job_outputs WHERE job_id=$1`, [job.id])).map((r) => r.output_index));
@@ -141,9 +166,9 @@ export async function processJob(job: JobRow, workerId: string, providerOverride
         featureKey: job.feature_key,
         prompt: shot.prompt,
         references: snap.references,
-        referenceImages,
+        referenceImages: shot.outpaint && shot.aspectRatio ? await outpaintCanvas(referenceImages, shot.aspectRatio) : referenceImages,
         requestedOutputs: 1,
-        aspectRatio: snap.aspectRatio,
+        aspectRatio: shot.aspectRatio ?? snap.aspectRatio,
         quality: snap.quality,
         options: { identityStrength: snap.identityStrength, callIndex: index },
       });

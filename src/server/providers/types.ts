@@ -9,7 +9,7 @@ export type GenerationRequest = {
   featureKey: string;
   prompt: string;
   references: Array<{ assetId: string; role: ReferenceRole }>;
-  referenceImages: Array<{ role: ReferenceRole; bytes: Buffer; mime: string }>;
+  referenceImages: Array<{ role: ReferenceRole; bytes: Buffer; mime: string; label?: string }>;
   requestedOutputs: number;
   aspectRatio: AspectRatio;
   quality: Quality;

@@ -17,13 +17,13 @@ const TERMINAL = new Set(["succeeded", "partial", "failed", "canceled", "rejecte
 
 type EngineOption = { key: "openai" | "gemini"; label: string; hint: string };
 
-export function StudioShell({ tool, access, characters, initialAssets, emailVerified, engines = [] }: { tool: ToolDef; access: Access; characters: Character[]; initialAssets: AssetLite[]; emailVerified: boolean; engines?: EngineOption[] }) {
+export function StudioShell({ tool, access, characters, initialAssets, emailVerified, engines = [], initialSlots = {}, initialPresets, initialPrompt }: { tool: ToolDef; access: Access; characters: Character[]; initialAssets: AssetLite[]; emailVerified: boolean; engines?: EngineOption[]; initialSlots?: Record<string, string>; initialPresets?: string[]; initialPrompt?: string }) {
   const router = useRouter();
   const [assets, setAssets] = useState(initialAssets);
   const [characterId, setCharacterId] = useState<string | null>(characters[0]?.id ?? null);
-  const [slots, setSlots] = useState<Record<string, string | null>>({});
-  const [presets, setPresets] = useState<string[]>(tool.defaultPresets);
-  const [prompt, setPrompt] = useState("");
+  const [slots, setSlots] = useState<Record<string, string | null>>(initialSlots);
+  const [presets, setPresets] = useState<string[]>(initialPresets?.length ? initialPresets : tool.defaultPresets);
+  const [prompt, setPrompt] = useState(initialPrompt ?? "");
   const [idea, setIdea] = useState("");
   const [choices, setChoices] = useState<BuilderChoices>({});
   const [lastAuto, setLastAuto] = useState("");
@@ -176,7 +176,7 @@ export function StudioShell({ tool, access, characters, initialAssets, emailVeri
                   </div>
                 )}
                 {!(slot.role === "character" && useSaved) && (
-                  <AssetPicker kind={slot.uploadKind} label={slot.label} assets={assets} value={slots[slot.role] ?? null} onChange={(id) => setSlots((s) => ({ ...s, [slot.role]: id }))} onUploaded={(a) => setAssets((x) => [a, ...x])} />
+                  <AssetPicker kind={slot.uploadKind} includeOutputs={!!slot.pickOutputs} label={slot.label} assets={assets} value={slots[slot.role] ?? null} onChange={(id) => setSlots((s) => ({ ...s, [slot.role]: id }))} onUploaded={(a) => setAssets((x) => [a, ...x])} />
                 )}
               </div>
             ))}

@@ -1,8 +1,33 @@
 // UI + server definitions for implemented generator tools. Client-safe (no secrets).
 import type { AspectRatio, Quality, ReferenceRole } from "@/server/providers/types";
 
-export type Slot = { role: ReferenceRole; label: string; hint: string; required: boolean; uploadKind: "character" | "product" | "outfit" | "background" };
-export type Preset = { key: string; label: string; prompt: string; requires?: ReferenceRole };
+export type Slot = {
+  role: ReferenceRole;
+  label: string;
+  hint: string;
+  required: boolean;
+  uploadKind: "character" | "product" | "outfit" | "background" | "style" | "other";
+  /** How this reference is described to the model (overrides the role's default wording). */
+  promptLabel?: string;
+  /** The slot shows a real person: only consented Character uploads are accepted. */
+  person?: boolean;
+  /** The picker also offers images generated in this app (Gallery outputs). */
+  pickOutputs?: boolean;
+};
+export type Preset = {
+  key: string;
+  label: string;
+  prompt: string;
+  requires?: ReferenceRole;
+  /** Per-image aspect ratio (multi-format tools); falls back to the job's ratio. */
+  aspect?: AspectRatio;
+  /** A sequence of beats: the preset expands into one image per beat (storyboards, keyframes). */
+  recipe?: string[];
+  /** Outpaint: the source image is placed on a larger canvas of `aspect` and the model fills the border. */
+  outpaint?: boolean;
+  /** The user must describe the change in the prompt box. */
+  needsPrompt?: boolean;
+};
 
 export type ToolDef = {
   key: string;
@@ -25,6 +50,9 @@ export type ToolDef = {
   promptRequired: boolean;
   creditRule: "auto" | "angle_sheet" | "photoshoot";
 };
+
+/** Implemented tools that don't generate images through the studio shell (own page + API). */
+export const SPECIAL_TOOLS = ["image_to_prompt"] as const;
 
 export const ASPECT_RATIOS: AspectRatio[] = ["1:1", "4:5", "9:16", "16:9", "3:2"];
 export const QUALITIES: Quality[] = ["standard", "high"];
@@ -436,6 +464,475 @@ export const PHASE2_TOOLS: Record<string, ToolDef> = {
   },
 };
 Object.assign(TOOLS, PHASE2_TOOLS);
+
+const productSlot = (required: boolean, hint = "A product photo you own or have rights to."): Slot => ({ role: "product", label: required ? "Product" : "Product (optional)", hint, required, uploadKind: "product" });
+const optionalCharacter = (hint = "Optional person who consented to appear (you, or someone with permission)."): Slot => ({ ...characterSlot, required: false, hint });
+const PRODUCT_WARNING = "Product shape, labels, logos and text may not be reproduced exactly. Check every image before commercial use.";
+const SYNTHETIC_AD_WARNING = "Synthetic, illustrative content. Never present it as real customers, real results or a real endorsement; label it where platform rules or law require.";
+
+/** Phase 3 (marketing & product) and Phase 4 (agency) tools. */
+export const PHASE34_TOOLS: Record<string, ToolDef> = {
+  character_interactions: {
+    key: "character_interactions",
+    title: "Character Interaction Studio",
+    tagline: "Two or three consented people together in one scene.",
+    instructions: ["Add the first person (saved character or photo) and a second person. A third is optional.", "Pick interactions (each is one image).", "Generate."],
+    examples: ["Co-hosts together for a podcast cover", "Team photo for an About page", "Coach and client scene for a program launch"],
+    warnings: ["Every person must have given explicit permission. Likeness of each person may vary; regenerate as needed.", "Never depict real people in situations they did not agree to."],
+    slots: [
+      { ...characterSlot, label: "Person 1", promptLabel: "PERSON 1: the first person; keep their identity.", person: true },
+      { role: "other", label: "Person 2", hint: "A second person who gave permission (upload as Character).", required: true, uploadKind: "character", promptLabel: "PERSON 2: the second person; keep their identity.", person: true },
+      { role: "style", label: "Person 3 (optional)", hint: "Optional third person who gave permission.", required: false, uploadKind: "character", promptLabel: "PERSON 3: the third person; keep their identity.", person: true },
+    ],
+    presetLabel: "Interactions",
+    presets: [
+      { key: "talking", label: "Talking together", prompt: "the people having a lively, friendly conversation at a table" },
+      { key: "podcast", label: "Podcast", prompt: "the people recording a podcast together with microphones, facing each other" },
+      { key: "team", label: "Team photo", prompt: "a confident team photo of the people standing side by side" },
+      { key: "high_five", label: "Celebrating", prompt: "the people celebrating a win with a high five, big smiles" },
+      { key: "walking", label: "Walking together", prompt: "the people walking together down a city street, laughing" },
+      { key: "meeting", label: "Business meeting", prompt: "the people in a business meeting around a laptop, collaborating" },
+    ],
+    presetMode: "shots",
+    minPresets: 1,
+    maxPresets: 6,
+    defaultPresets: ["talking", "team"],
+    defaultAspect: "16:9",
+    allowVariations: true,
+    promptPlaceholder: "Optional: setting and outfits, e.g. 'modern loft studio, everyone in casual black'",
+    promptRequired: false,
+    creditRule: "auto",
+  },
+  testimonial_layouts: {
+    key: "testimonial_layouts",
+    title: "Testimonial Scene Creator",
+    tagline: "Clean testimonial graphics for REAL, verified customer quotes.",
+    instructions: ["Upload the customer's photo (only with their permission).", "Paste their exact, real quote in quotes, plus their first name.", "Pick layouts and generate."],
+    examples: ["Sales page testimonial cards", "Social proof posts", "Case-study covers"],
+    warnings: ["Use only real, verified quotes from real customers who agreed to be featured. Never invent testimonials.", "AI can misspell text; check the quote word by word before publishing."],
+    slots: [{ ...characterSlot, label: "Customer photo", hint: "The real customer's photo, uploaded with their explicit permission.", promptLabel: "CUSTOMER: the real customer giving the testimonial; keep their identity." }],
+    presetLabel: "Layouts",
+    presets: [
+      { key: "card", label: "Quote card", prompt: "clean testimonial card: customer portrait in a circle, the quote in elegant typography, name below, five small stars" },
+      { key: "split", label: "Split layout", prompt: "split layout: customer photo on the left half, large quote text on the right half" },
+      { key: "story", label: "Story format", prompt: "vertical story testimonial: customer portrait on top, quote in a speech bubble below" },
+      { key: "minimal", label: "Minimal", prompt: "minimal testimonial: big quotation marks, short quote, small customer photo and name" },
+    ],
+    presetMode: "shots",
+    minPresets: 1,
+    maxPresets: 4,
+    defaultPresets: ["card", "split"],
+    defaultAspect: "1:1",
+    allowVariations: true,
+    promptPlaceholder: "Exact real quote in quotes + name, e.g. '\"I doubled my sales in 30 days\" - Maria, verified customer'",
+    promptRequired: true,
+    creditRule: "auto",
+  },
+  influencer_campaigns: {
+    key: "influencer_campaigns",
+    title: "Influencer Brand Campaigns",
+    tagline: "A full campaign series with your consented virtual model and product.",
+    instructions: ["Add your character (the consented model) and your product.", "Pick campaign shots (each is one image).", "Describe the brand and audience, then generate."],
+    examples: ["Launch week content for a new product", "Seasonal campaign series", "Brand ambassador visuals"],
+    warnings: [SYNTHETIC_AD_WARNING, PRODUCT_WARNING],
+    slots: [characterSlot, productSlot(true)],
+    presetLabel: "Campaign shots",
+    presets: [
+      { key: "hero", label: "Hero shot", prompt: "campaign hero image: the person confidently presenting the product, premium lighting" },
+      { key: "lifestyle", label: "Lifestyle", prompt: "the person using the product naturally in an aspirational everyday moment" },
+      { key: "closeup", label: "Product close-up", prompt: "close-up of the person's hands holding the product, label visible" },
+      { key: "selfie", label: "Creator selfie", prompt: "creator-style selfie with the product, authentic social media feel" },
+      { key: "outdoor", label: "Outdoor", prompt: "the person with the product outdoors in beautiful natural light" },
+      { key: "flatlay", label: "Flat lay", prompt: "styled flat lay of the product with the person's hand entering the frame" },
+    ],
+    presetMode: "shots",
+    minPresets: 1,
+    maxPresets: 6,
+    defaultPresets: ["hero", "lifestyle", "closeup", "selfie"],
+    defaultAspect: "4:5",
+    allowVariations: true,
+    promptPlaceholder: "Brand + audience, e.g. 'clean vegan skincare brand for women 25-40, beige and sage colors'",
+    promptRequired: true,
+    creditRule: "auto",
+  },
+  before_after: {
+    key: "before_after",
+    title: "Before/After Creator",
+    tagline: "Clearly labeled concept comparisons.",
+    instructions: ["Add your character (optional) or a product.", "Describe the before and the after.", "Pick a layout and generate."],
+    examples: ["Room makeover concept", "Messy desk vs organized desk", "Old brand look vs new brand look"],
+    warnings: ["These are illustrative CONCEPTS, not real results. Don't use them for health, weight-loss, medical or cosmetic result claims.", SYNTHETIC_AD_WARNING],
+    slots: [optionalCharacter(), productSlot(false)],
+    presetLabel: "Layouts",
+    presets: [
+      { key: "side", label: "Side by side", prompt: "side-by-side comparison, left half labeled BEFORE, right half labeled AFTER, same framing on both sides, small text 'Concept illustration'" },
+      { key: "top_bottom", label: "Top / bottom", prompt: "vertical comparison, top labeled BEFORE, bottom labeled AFTER, same framing, small text 'Concept illustration'" },
+      { key: "slider", label: "Slider look", prompt: "split image with a vertical divider line like a comparison slider, BEFORE and AFTER labels, small text 'Concept illustration'" },
+    ],
+    presetMode: "shots",
+    minPresets: 1,
+    maxPresets: 3,
+    defaultPresets: ["side"],
+    defaultAspect: "1:1",
+    allowVariations: true,
+    promptPlaceholder: "Before and after, e.g. 'before: cluttered home office; after: clean, organized, plants and good light'",
+    promptRequired: true,
+    creditRule: "auto",
+  },
+  ad_variations: {
+    key: "ad_variations",
+    title: "Ad Variation Generator",
+    tagline: "New angles and layouts from an ad you already have.",
+    instructions: ["Upload your existing ad creative (one you own).", "Pick variation types (each is one image).", "Generate and A/B test."],
+    examples: ["Fresh variants when an ad fatigues", "Different hooks for testing", "Seasonal versions of a winner"],
+    warnings: ["Keep claims and offers truthful; AI may change text, prices or logos, so check everything.", SYNTHETIC_AD_WARNING],
+    slots: [{ role: "style", label: "Your ad", hint: "An ad image you own or have rights to.", required: true, uploadKind: "product", promptLabel: "ORIGINAL AD: the existing ad creative to make a variation of; keep the brand, product and offer." }, productSlot(false)],
+    presetLabel: "Variations",
+    presets: [
+      { key: "new_bg", label: "New background", prompt: "same ad concept with a fresh, different background and color palette" },
+      { key: "new_layout", label: "New layout", prompt: "same message and product in a completely different layout and composition" },
+      { key: "lifestyle", label: "Lifestyle version", prompt: "lifestyle version showing the product in a real-life setting" },
+      { key: "minimal", label: "Minimal version", prompt: "minimal, clean version with lots of white space" },
+      { key: "bold", label: "Bold scroll-stopper", prompt: "bold, high-contrast, scroll-stopping version" },
+      { key: "seasonal", label: "Seasonal", prompt: "seasonal holiday version of the same ad" },
+    ],
+    presetMode: "shots",
+    minPresets: 1,
+    maxPresets: 6,
+    defaultPresets: ["new_bg", "new_layout", "bold"],
+    defaultAspect: "1:1",
+    allowVariations: true,
+    promptPlaceholder: "Optional: what to keep or change, e.g. 'keep the headline, try warmer colors'",
+    promptRequired: false,
+    creditRule: "auto",
+  },
+  fashion_model: {
+    key: "fashion_model",
+    title: "AI Fashion Model Studio",
+    tagline: "Your garments on a consented model, in fashion scenes.",
+    instructions: ["Upload the garment (flat lay or on a hanger) and a consented model.", "Pick fashion scenes.", "Generate. Fit is illustrative."],
+    examples: ["E-commerce on-model photos", "Lookbook pages", "Social posts for a clothing brand"],
+    warnings: ["Fit, drape, fabric and color are illustrative and may differ from the real garment. Don't use as a size guide.", "The model must be you or someone who gave explicit permission."],
+    slots: [{ role: "outfit", label: "Garment", hint: "Your clothing item (flat lay, hanger or worn).", required: true, uploadKind: "outfit" }, { ...characterSlot, label: "Model" }],
+    presetLabel: "Scenes",
+    presets: [
+      { key: "ecom", label: "E-commerce white", prompt: "full-body e-commerce photo on a pure white background, front view, wearing the garment" },
+      { key: "runway", label: "Runway", prompt: "walking a fashion runway wearing the garment, show lights" },
+      { key: "street", label: "Street style", prompt: "street style fashion photo in the city wearing the garment" },
+      { key: "studio", label: "Editorial studio", prompt: "high-fashion editorial studio photo wearing the garment" },
+      { key: "detail", label: "Detail shot", prompt: "close-up detail shot of the garment being worn, fabric texture visible" },
+      { key: "back", label: "Back view", prompt: "full-body back view on a white background wearing the garment" },
+    ],
+    presetMode: "shots",
+    minPresets: 1,
+    maxPresets: 6,
+    defaultPresets: ["ecom", "street", "studio"],
+    defaultAspect: "4:5",
+    allowVariations: true,
+    promptPlaceholder: "Optional: styling, e.g. 'paired with white sneakers, hair in a bun'",
+    promptRequired: false,
+    creditRule: "auto",
+  },
+  product_lifestyle: {
+    key: "product_lifestyle",
+    title: "Product Lifestyle Photography",
+    tagline: "Beautiful lifestyle photos from one product picture.",
+    instructions: ["Upload your product photo.", "Pick scenes (each is one image).", "Generate."],
+    examples: ["Website hero images", "Instagram product posts", "Amazon secondary images"],
+    warnings: [PRODUCT_WARNING],
+    slots: [productSlot(true), optionalCharacter()],
+    presetLabel: "Scenes",
+    presets: [
+      { key: "kitchen", label: "Kitchen counter", prompt: "the product on a bright marble kitchen counter with fresh ingredients" },
+      { key: "bathroom", label: "Bathroom shelf", prompt: "the product on a clean spa-like bathroom shelf with towels and plants" },
+      { key: "desk", label: "Desk setup", prompt: "the product on a stylish home-office desk next to a laptop and coffee" },
+      { key: "outdoor", label: "Outdoors", prompt: "the product outdoors on a picnic blanket in sunlight" },
+      { key: "luxury", label: "Luxury podium", prompt: "the product on a stone podium with soft shadows, luxury mood" },
+      { key: "in_hand", label: "In hand", prompt: "a hand holding the product naturally, blurred lifestyle background" },
+      { key: "gift", label: "Gift moment", prompt: "the product as a gift with wrapping paper and a ribbon" },
+    ],
+    presetMode: "shots",
+    minPresets: 1,
+    maxPresets: 6,
+    defaultPresets: ["kitchen", "desk", "luxury"],
+    defaultAspect: "4:5",
+    allowVariations: true,
+    promptPlaceholder: "Optional: brand mood, e.g. 'natural, earthy, sage green accents'",
+    promptRequired: false,
+    creditRule: "auto",
+  },
+  digital_mockups: {
+    key: "digital_mockups",
+    title: "Digital Product Mockup Builder",
+    tagline: "Show your ebook, course or app on devices and boxes.",
+    instructions: ["Upload your cover or screenshot (the design you own).", "Pick mockups (each is one image).", "Generate."],
+    examples: ["Ebook on a tablet", "Course bundle box", "App screens on a phone"],
+    warnings: ["Small text on the cover may be redrawn imperfectly; for exact text, place your design in an editor afterwards."],
+    slots: [productSlot(true, "Your cover, screenshot or design (you own it).")],
+    presetLabel: "Mockups",
+    presets: [
+      { key: "tablet", label: "Tablet", prompt: "the design displayed on a tablet screen lying on a desk" },
+      { key: "laptop", label: "Laptop", prompt: "the design on a laptop screen in a bright workspace" },
+      { key: "phone", label: "Phone", prompt: "the design on a smartphone held in a hand" },
+      { key: "book", label: "Hardcover book", prompt: "the design as the cover of a hardcover book standing on a table" },
+      { key: "bundle", label: "Bundle", prompt: "a bundle display: the design on a laptop, tablet, phone and a printed workbook together" },
+      { key: "box", label: "Product box", prompt: "the design printed on a premium product box" },
+    ],
+    presetMode: "shots",
+    minPresets: 1,
+    maxPresets: 6,
+    defaultPresets: ["tablet", "bundle"],
+    defaultAspect: "4:5",
+    allowVariations: true,
+    promptPlaceholder: "Optional: style, e.g. 'clean white desk, soft shadows'",
+    promptRequired: false,
+    creditRule: "auto",
+  },
+  product_demonstrator: {
+    key: "product_demonstrator",
+    title: "Virtual Product Demonstrator",
+    tagline: "Your character demonstrating your product.",
+    instructions: ["Add your character and product.", "Pick demo moments (each is one image).", "Describe how the product is used."],
+    examples: ["How-to visuals for a sales page", "Product explainer frames", "Launch posts"],
+    warnings: [SYNTHETIC_AD_WARNING, PRODUCT_WARNING],
+    slots: [characterSlot, productSlot(true)],
+    presetLabel: "Demo moments",
+    presets: [
+      { key: "presenting", label: "Presenting", prompt: "the person presenting the product to the camera like a host" },
+      { key: "using", label: "Using it", prompt: "the person actively using the product, focused" },
+      { key: "explaining", label: "Explaining", prompt: "the person pointing at a feature of the product while explaining" },
+      { key: "result", label: "Happy result", prompt: "the person happy and satisfied after using the product" },
+      { key: "unboxing", label: "Unboxing", prompt: "the person unboxing the product, excited" },
+    ],
+    presetMode: "shots",
+    minPresets: 1,
+    maxPresets: 5,
+    defaultPresets: ["presenting", "using", "explaining"],
+    defaultAspect: "4:5",
+    allowVariations: true,
+    promptPlaceholder: "How it's used, e.g. 'portable blender: making a smoothie in a small kitchen'",
+    promptRequired: true,
+    creditRule: "auto",
+  },
+  brand_mascots: {
+    key: "brand_mascots",
+    title: "Brand Mascot Factory",
+    tagline: "Design a fictional mascot and keep it consistent.",
+    instructions: ["Describe your mascot, or upload an existing mascot image you own.", "Pick the sheet views (each is one image).", "Save the best one and reuse it as the reference."],
+    examples: ["Friendly mascot for a kids' brand", "Animal mascot for a coffee shop", "Robot mascot for a tech startup"],
+    warnings: ["Mascots must be original. Don't imitate existing characters, logos or celebrities."],
+    slots: [{ role: "style", label: "Existing mascot (optional)", hint: "An image of your own mascot to stay consistent with.", required: false, uploadKind: "product", promptLabel: "MASCOT: the existing mascot design; keep its exact design, colors and proportions." }],
+    presetLabel: "Views",
+    presets: [
+      { key: "front", label: "Front pose", prompt: "the mascot standing in a friendly front pose, plain white background" },
+      { key: "waving", label: "Waving", prompt: "the mascot waving hello, plain white background" },
+      { key: "happy", label: "Happy", prompt: "the mascot jumping with joy, plain white background" },
+      { key: "thinking", label: "Thinking", prompt: "the mascot thinking with a hand on its chin, plain white background" },
+      { key: "pointing", label: "Pointing", prompt: "the mascot pointing to the side as if presenting, plain white background" },
+      { key: "scene", label: "In a scene", prompt: "the mascot in a colorful brand scene" },
+    ],
+    presetMode: "shots",
+    minPresets: 1,
+    maxPresets: 6,
+    defaultPresets: ["front", "waving", "happy", "thinking"],
+    defaultAspect: "1:1",
+    allowVariations: true,
+    promptPlaceholder: "Describe the mascot, e.g. 'a cheerful round coffee bean with big eyes, red scarf, 3D cartoon style'",
+    promptRequired: true,
+    creditRule: "auto",
+  },
+  marketplace_images: {
+    key: "marketplace_images",
+    title: "Marketplace Image Optimizer",
+    tagline: "Listing images in the formats marketplaces expect.",
+    instructions: ["Upload your product photo.", "Pick the image types (each is one image, in the right shape).", "Generate, then check against your marketplace's current rules."],
+    examples: ["Amazon main + secondary images", "Etsy listing photos", "Shopify product gallery"],
+    warnings: [PRODUCT_WARNING, "Marketplace rules change; check the current image requirements of your marketplace before uploading."],
+    slots: [productSlot(true)],
+    presetLabel: "Image types",
+    presets: [
+      { key: "main_white", label: "Main (white bg)", prompt: "main listing image: the product alone on a pure white background (RGB 255,255,255), centered, filling about 85% of the frame, no text, no props", aspect: "1:1" },
+      { key: "angle", label: "Second angle", prompt: "the product from a different angle on a pure white background, no text", aspect: "1:1" },
+      { key: "lifestyle", label: "Lifestyle", prompt: "the product in a realistic lifestyle setting that shows how it's used", aspect: "1:1" },
+      { key: "scale", label: "Size/scale", prompt: "the product next to common everyday objects to show its real size", aspect: "1:1" },
+      { key: "features", label: "Feature callouts", prompt: "infographic layout: the product with 3 short feature callouts and thin lines pointing to details", aspect: "1:1" },
+      { key: "detail", label: "Detail close-up", prompt: "macro close-up of the product's material and finish", aspect: "1:1" },
+    ],
+    presetMode: "shots",
+    minPresets: 1,
+    maxPresets: 6,
+    defaultPresets: ["main_white", "angle", "lifestyle", "features"],
+    defaultAspect: "1:1",
+    allowVariations: false,
+    promptPlaceholder: "Product name + key features, e.g. 'bamboo cutting board: eco-friendly, juice groove, 3 sizes'",
+    promptRequired: false,
+    creditRule: "auto",
+  },
+  storyboards: {
+    key: "storyboards",
+    title: "Storyboard Generator",
+    tagline: "6 to 12 consistent scenes from one brief.",
+    instructions: ["Add your character (optional) and write the brief.", "Pick a storyboard type (each beat becomes one frame).", "Generate the whole board in one job."],
+    examples: ["Ad storyboard before a video shoot", "Short story for social media", "Course trailer plan"],
+    warnings: [LIKENESS_WARNING],
+    slots: [optionalCharacter("Optional main character who consented to appear."), productSlot(false)],
+    presetLabel: "Storyboard type",
+    presets: [
+      { key: "ad6", label: "Ad (6 frames)", prompt: "ad", recipe: ["frame 1, hook: an attention-grabbing opening moment", "frame 2, problem: the main character struggling with the problem", "frame 3, discovery: the character discovers the solution", "frame 4, demo: the solution in action", "frame 5, result: the happy outcome", "frame 6, call to action: the character inviting the viewer to try it"] },
+      { key: "story8", label: "Story (8 frames)", prompt: "story", recipe: ["frame 1: establishing shot of the world", "frame 2: introducing the main character", "frame 3: the inciting moment", "frame 4: rising tension", "frame 5: the turning point", "frame 6: the climax", "frame 7: resolution", "frame 8: closing shot"] },
+      { key: "tutorial6", label: "Tutorial (6 frames)", prompt: "tutorial", recipe: ["frame 1: presenter introduces the topic", "frame 2: step one shown clearly", "frame 3: step two shown clearly", "frame 4: step three shown clearly", "frame 5: the finished result", "frame 6: presenter's recap and next step"] },
+      { key: "ugc12", label: "UGC video (12 frames)", prompt: "ugc", recipe: ["frame 1: selfie hook to camera", "frame 2: showing the problem", "frame 3: reveal of the product", "frame 4: unboxing", "frame 5: first use", "frame 6: close-up detail", "frame 7: reaction", "frame 8: daily-life use", "frame 9: before/after concept", "frame 10: favourite feature", "frame 11: recommendation to camera", "frame 12: end card with product"] },
+    ],
+    presetMode: "single",
+    minPresets: 1,
+    maxPresets: 1,
+    defaultPresets: ["ad6"],
+    defaultAspect: "16:9",
+    allowVariations: false,
+    promptPlaceholder: "The brief, e.g. 'a busy mom discovers a 10-minute meal-prep app and gets her evenings back'",
+    promptRequired: true,
+    creditRule: "auto",
+  },
+  video_prep: {
+    key: "video_prep",
+    title: "AI Character Video Preparation",
+    tagline: "Consistent start/end frames to feed into video tools.",
+    instructions: ["Add your character.", "Describe the shot; pick a frame set.", "Use the frames in your video tool (Kling, Higgsfield, Runway…). This tool makes stills, not video."],
+    examples: ["Start and end frames for an image-to-video clip", "Keyframes for a talking-head reel", "Consistent shots for a short film"],
+    warnings: [LIKENESS_WARNING, "This tool creates still images only."],
+    slots: [characterSlot, { role: "background", label: "Location (optional)", hint: "Optional place photo you have the right to use.", required: false, uploadKind: "background" }],
+    presetLabel: "Frame set",
+    presets: [
+      { key: "start_end", label: "Start + end frame", prompt: "start_end", recipe: ["START frame of the shot: the opening position of the action", "END frame of the same shot: the final position of the action, same location, lighting, outfit and camera"] },
+      { key: "keyframes4", label: "4 keyframes", prompt: "keyframes", recipe: ["keyframe 1 of 4: beginning of the action", "keyframe 2 of 4: early middle of the action", "keyframe 3 of 4: late middle of the action", "keyframe 4 of 4: end of the action; same location, lighting, outfit and camera throughout"] },
+      { key: "coverage", label: "Shot coverage (3)", prompt: "coverage", recipe: ["wide establishing shot of the scene", "medium shot of the character in the same scene", "close-up of the character's face in the same scene"] },
+    ],
+    presetMode: "single",
+    minPresets: 1,
+    maxPresets: 1,
+    defaultPresets: ["start_end"],
+    defaultAspect: "16:9",
+    allowVariations: false,
+    promptPlaceholder: "The shot, e.g. 'she walks into a sunny café, sits down and smiles at the camera'",
+    promptRequired: true,
+    creditRule: "auto",
+  },
+  restore_enhance: {
+    key: "restore_enhance",
+    title: "Photo Restoration & Enhancement",
+    tagline: "Repair, sharpen and colorize old or damaged portraits.",
+    instructions: ["Upload the old photo (with permission of the people shown or their family).", "Pick what to do (each option is one result).", "Compare with the original."],
+    examples: ["Family photo restoration", "Colorize a black-and-white portrait", "Sharpen a blurry old picture"],
+    warnings: ["Restoration is AI reconstruction: missing details are invented and faces can change. Keep the original; don't present results as untouched historical records."],
+    slots: [{ ...characterSlot, label: "Old photo", hint: "The photo to restore (people shown must be you, or with permission).", promptLabel: "ORIGINAL PHOTO: restore this exact photo; keep the same people, faces, pose and composition." }],
+    presetLabel: "Restoration",
+    presets: [
+      { key: "repair", label: "Repair damage", prompt: "remove scratches, tears, stains and dust; keep it looking like the same original photo" },
+      { key: "colorize", label: "Colorize", prompt: "repair and colorize with natural, historically plausible colors" },
+      { key: "enhance", label: "Sharpen & enhance", prompt: "sharpen, denoise and enhance detail and contrast while keeping it natural" },
+      { key: "full", label: "Full restoration", prompt: "full restoration: repair damage, enhance detail and colorize naturally" },
+    ],
+    presetMode: "shots",
+    minPresets: 1,
+    maxPresets: 4,
+    defaultPresets: ["repair", "colorize"],
+    defaultAspect: "4:5",
+    allowVariations: false,
+    promptPlaceholder: "Optional notes, e.g. 'the dress was dark blue, the background was a garden'",
+    promptRequired: false,
+    creditRule: "auto",
+  },
+  scene_recreation: {
+    key: "scene_recreation",
+    title: "Scene Recreation",
+    tagline: "An original image inspired by a composition you like.",
+    instructions: ["Upload an inspiration image you have the right to use.", "Add your character.", "Generate an ORIGINAL scene with a similar mood and composition."],
+    examples: ["Recreate the vibe of your favourite photo with yourself in it", "Match a moodboard image", "Consistent look across a feed"],
+    warnings: ["Results must be original: don't copy copyrighted photos, film stills or artworks exactly, or include other people from the inspiration image."],
+    slots: [characterSlot, { role: "style", label: "Inspiration image", hint: "An image you have the right to use, for composition and mood only.", required: true, uploadKind: "style", promptLabel: "INSPIRATION: use ONLY its composition, lighting and mood. Do not copy its people, text, logos or exact content." }],
+    presetLabel: "How close",
+    presets: [
+      { key: "loose", label: "Loosely inspired", prompt: "loosely inspired by the inspiration image's mood and colors, new original scene" },
+      { key: "composition", label: "Same composition", prompt: "similar camera angle and composition to the inspiration image, new original setting" },
+      { key: "lighting", label: "Same lighting", prompt: "match the inspiration image's lighting and color grading in an original scene" },
+    ],
+    presetMode: "shots",
+    minPresets: 1,
+    maxPresets: 3,
+    defaultPresets: ["composition"],
+    defaultAspect: "4:5",
+    allowVariations: true,
+    promptPlaceholder: "Optional: what to change, e.g. 'set it in Lisbon instead, wearing a white dress'",
+    promptRequired: false,
+    creditRule: "auto",
+  },
+  batch_campaigns: {
+    key: "batch_campaigns",
+    title: "Batch Campaign Generator",
+    tagline: "One brief in, every format out: posts, stories, banners.",
+    instructions: ["Add your product and/or character.", "Write the campaign brief; put any exact text in quotes.", "Pick formats; each comes out in its own correct shape."],
+    examples: ["Launch assets for every platform at once", "Black Friday campaign set", "Event promotion pack"],
+    warnings: [SYNTHETIC_AD_WARNING, TEXT_WARNING],
+    slots: [optionalCharacter(), productSlot(false)],
+    presetLabel: "Formats",
+    presets: [
+      { key: "feed", label: "Feed post 1:1", prompt: "square social feed post for the campaign", aspect: "1:1" },
+      { key: "portrait", label: "Portrait post 4:5", prompt: "portrait social feed post for the campaign", aspect: "4:5" },
+      { key: "story", label: "Story / Reel cover 9:16", prompt: "vertical story or reel cover for the campaign, key text in the middle safe area", aspect: "9:16" },
+      { key: "banner", label: "Web banner 16:9", prompt: "wide website hero banner for the campaign, space for a headline on one side", aspect: "16:9" },
+      { key: "youtube", label: "YouTube thumbnail 16:9", prompt: "YouTube thumbnail for the campaign, bold and high contrast", aspect: "16:9" },
+      { key: "pin", label: "Pinterest pin 3:2", prompt: "Pinterest-style pin for the campaign", aspect: "3:2" },
+    ],
+    presetMode: "shots",
+    minPresets: 1,
+    maxPresets: 6,
+    defaultPresets: ["feed", "story", "banner"],
+    defaultAspect: "1:1",
+    allowVariations: false,
+    promptPlaceholder: "Campaign brief, e.g. 'Black Friday 40% off our yoga mats, headline \"40% OFF THIS WEEK\"'",
+    promptRequired: true,
+    creditRule: "auto",
+  },
+};
+Object.assign(TOOLS, PHASE34_TOOLS);
+
+/** Image Editor (opened from the Gallery's "Edit" button): edit, enhance, upscale, expand, remove background. */
+export const EDITOR_TOOLS: Record<string, ToolDef> = {
+  image_edit: {
+    key: "image_edit",
+    title: "Image Editor",
+    tagline: "Edit, enhance, upscale, expand or clean up any image.",
+    instructions: ["Pick an image: one from your Gallery or a new upload.", "Choose what to do (each option is one result). For Magic edit, describe the change.", "Generate and compare. The original is never changed."],
+    examples: ["Remove something from the background", "Make a square photo wide for a banner", "Sharpen and upscale before printing"],
+    warnings: ["AI edits regenerate the image: small details, text or faces can change slightly. Compare with the original."],
+    slots: [{ role: "other", label: "Image to edit", hint: "Choose from your Gallery or upload an image you have the right to use.", required: true, uploadKind: "other", pickOutputs: true, promptLabel: "SOURCE IMAGE: the image to edit. Keep everything that the edit does not mention exactly the same: people, faces, composition, colors and details." }],
+    presetLabel: "Edits",
+    presets: [
+      { key: "magic_edit", label: "Magic edit (describe it)", prompt: "apply exactly the change described in the user direction and nothing else", needsPrompt: true },
+      { key: "enhance", label: "Enhance", prompt: "enhance the image: better sharpness, clarity, lighting and color balance, natural skin texture; same content and composition" },
+      { key: "upscale", label: "Upscale (high-res)", prompt: "reproduce the identical image at the highest resolution with crisp fine detail; do not change content, framing or colors" },
+      { key: "remove_bg", label: "Remove background", prompt: "keep the main subject exactly as it is and replace the background with a pure white seamless background" },
+      { key: "studio_bg", label: "Studio background", prompt: "keep the main subject exactly as it is and place them on a soft grey professional studio backdrop with matching lighting" },
+      { key: "relight", label: "Relight", prompt: "keep everything the same but relight the scene with flattering soft studio lighting" },
+      { key: "expand_wide", label: "Expand to wide 16:9", prompt: "outpaint", aspect: "16:9", outpaint: true },
+      { key: "expand_tall", label: "Expand to tall 9:16", prompt: "outpaint", aspect: "9:16", outpaint: true },
+      { key: "expand_square", label: "Expand to square 1:1", prompt: "outpaint", aspect: "1:1", outpaint: true },
+      { key: "variation", label: "Similar variation", prompt: "create a fresh variation of this image with the same subject, style and mood but a slightly different pose and composition" },
+    ],
+    presetMode: "shots",
+    minPresets: 1,
+    maxPresets: 6,
+    defaultPresets: ["enhance"],
+    defaultAspect: "4:5",
+    allowVariations: true,
+    promptPlaceholder: "For Magic edit: describe the change, e.g. 'remove the cup from the table' or 'make the jacket red'",
+    promptRequired: false,
+    creditRule: "auto",
+  },
+};
+Object.assign(TOOLS, EDITOR_TOOLS);
+
+
 
 export const PHOTOSHOOT_RECIPES: Record<string, string[]> = {
   personal_brand: [

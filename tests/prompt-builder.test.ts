@@ -6,7 +6,7 @@ describe("prompt builder", () => {
   it("has ideas and option groups for every implemented tool", () => {
     for (const key of Object.keys(TOOLS)) {
       expect(TOOL_IDEAS[key]?.length, key).toBeGreaterThan(0);
-      expect(groupsForTool(key).length, key).toBeGreaterThan(0);
+      if (key !== "restore_enhance") expect(groupsForTool(key).length, key).toBeGreaterThan(0);
     }
   });
 

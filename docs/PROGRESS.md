@@ -41,3 +41,12 @@ _Last updated: 2026-11-11_
 - No Sentry or alerting yet: logs are structured JSON to stdout, and cost caps act as hard stops.
 - Phase-1 tools stay `beta` until the real-provider run. Then flip them to `live` in `/admin`.
 - Phases 2–4 have not started; their tools are cataloged only.
+
+## 2026-11-12 — All 30 tools implemented (beta), engines, editor
+- Engines: OpenAI (gpt-image-2) and Gemini (gemini-3.1-flash-image), chosen per job; worker generates a job's images in parallel.
+- Tools: Phase 2 (04–09, 12, 13, 16), Phase 3 (14, 15, 17–24) and Phase 4 (10, 25–30) are implemented and released as **beta**
+  (admins + allowlisted users). Each still needs a real-provider spot check before an admin flips it to `live`.
+- Image Editor (from Gallery: Edit, Enhance, Upscale, Expand/outpaint, Remove BG, Variation) and Image-to-Prompt (Gemini vision).
+- Prompt Builder (ideas + style/mood/lighting/framing/outfit/background chips + Surprise me) on every tool.
+- Admin accounts use top-plan limits. Tests: 100 unit/integration + browser e2e passing.
+- Not verified live yet: Image-to-Prompt and outpaint against real providers (the sandbox proxy can't send Gemini's header).

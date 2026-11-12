@@ -5,6 +5,15 @@ import type { AssetLite } from "@/components/uploader";
 import { Button, Card, Notice, PageHeader, cx, inputCls } from "@/components/ui";
 import { TOOLS } from "@/lib/tools";
 
+const EDIT_ACTIONS: Array<[string, string]> = [
+  ["magic_edit", "✏️ Edit"],
+  ["enhance", "Enhance"],
+  ["upscale", "Upscale"],
+  ["expand_wide", "Expand"],
+  ["remove_bg", "Remove BG"],
+  ["variation", "Variation"],
+];
+
 export default function Gallery() {
   const [items, setItems] = useState<AssetLite[]>([]);
   const [feature, setFeature] = useState("");
@@ -67,6 +76,12 @@ export default function Gallery() {
                   <button onClick={() => toggleFav(a)} aria-pressed={!!a.favorite} aria-label="Favorite" className={a.favorite ? "text-accent" : "text-muted"}>★</button>
                   <a href={fileUrl(a.id, { download: true })} className="text-muted hover:text-ink">Download</a>
                 </span>
+                <div className="flex w-full flex-wrap gap-1" aria-label="Edit this image">
+                  {EDIT_ACTIONS.map(([preset, label]) => (
+                    <a key={preset} href={`/studio/image_edit?source=${a.id}&preset=${preset}`} className="rounded-full border border-line px-2 py-0.5 text-muted hover:border-accent hover:text-ink">{label}</a>
+                  ))}
+                  <a href={`/studio/image_to_prompt?source=${a.id}`} className="rounded-full border border-line px-2 py-0.5 text-muted hover:border-accent hover:text-ink">Get prompt</a>
+                </div>
               </div>
             </li>
           ))}

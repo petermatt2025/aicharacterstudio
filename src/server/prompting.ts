@@ -1,7 +1,7 @@
 import { IDENTITY_LOCK, PHOTOSHOOT_RECIPES, type ToolDef } from "@/lib/tools";
-import type { ReferenceRole } from "./providers/types";
+import type { AspectRatio, ReferenceRole } from "./providers/types";
 
-export type Shot = { presetKey: string | null; prompt: string };
+export type Shot = { presetKey: string | null; prompt: string; aspectRatio?: AspectRatio; outpaint?: boolean };
 
 const ROLE_INSTRUCTION: Record<ReferenceRole, string> = {
   character: "CHARACTER reference: the person to depict.",
@@ -31,6 +31,23 @@ const FEATURE_FRAME: Record<string, string> = {
   thumbnails: "Design a high-impact video thumbnail featuring the same person. If the user direction contains text in quotes, render exactly that text, large and legible, spelled correctly.",
   social_content: "Design a polished social media graphic featuring the same person. If the user direction contains text in quotes, render exactly that text, legible and spelled correctly.",
   memes: "Create an original, good-natured meme image starring the same person. If the user direction contains a caption in quotes, render exactly that caption in bold meme lettering.",
+  character_interactions: "Create one photorealistic image of the referenced people together in the same scene, interacting naturally. Keep each person's identity distinct and accurate; do not merge faces.",
+  testimonial_layouts: "Design a clean testimonial graphic for a real customer. Render the quote exactly as given in quotes, spelled correctly, and the name exactly as given. Do not invent any other claims.",
+  influencer_campaigns: "Create a polished brand-campaign photo of the same person with the product. It is synthetic campaign content.",
+  before_after: "Create a clearly labeled BEFORE/AFTER concept comparison image. Both halves must use the same framing. It is an illustration, not a real result.",
+  ad_variations: "Create a new variation of the referenced ad creative for A/B testing. Keep the brand, product and offer; change only what the variation asks for.",
+  fashion_model: "Create a fashion photo of the same person wearing the referenced garment. Reproduce the garment's color, pattern and details faithfully.",
+  product_lifestyle: "Create a professional lifestyle product photograph featuring the referenced product, reproduced faithfully.",
+  digital_mockups: "Create a realistic product mockup photo showing the referenced design on the device or object described. Keep the design undistorted.",
+  product_demonstrator: "Create a photorealistic photo of the same person demonstrating the referenced product. It is synthetic demo content.",
+  brand_mascots: "Create an original brand mascot character in a clean, consistent design (character-sheet quality). Keep the same design across every view.",
+  marketplace_images: "Create a marketplace product listing image of the referenced product, reproduced faithfully, following the layout described.",
+  storyboards: "Create one frame of a storyboard. Keep the same characters, outfits, art direction and color palette across all frames; cinematic composition.",
+  video_prep: "Create one still frame for an image-to-video tool. Keep the character, outfit, location, lighting and camera consistent across all frames of the set.",
+  restore_enhance: "Restore the referenced old photograph. Keep the same people, faces, expressions, pose and composition; do not modernize clothing or change the scene.",
+  scene_recreation: "Create an ORIGINAL photo of the same person using only the mood, lighting and composition of the inspiration reference.",
+  image_edit: "Edit the source image as instructed. This is a photo edit, not a new image: preserve identity, composition and every detail that is not part of the edit.",
+  batch_campaigns: "Create one campaign asset in the requested format. Keep a consistent brand look across formats. If the brief contains text in quotes, render exactly that text, legible.",
 };
 
 /**
@@ -46,7 +63,7 @@ export function buildShots(args: {
   variations: number;
 }): Shot[] {
   const { tool, roles, presetKeys, userPrompt, identityStrength, variations } = args;
-  const refLines = roles.map((r, i) => `Image ${i + 1}: ${ROLE_INSTRUCTION[r]}`);
+  const refLines = roles.map((r, i) => `Image ${i + 1}: ${tool.slots.find((sl) => sl.role === r)?.promptLabel ?? ROLE_INSTRUCTION[r]}`);
   const identity = roles.includes("character") ? IDENTITY_LOCK[identityStrength].clause : "";
   const user = userPrompt.trim() ? `User direction: """${userPrompt.trim().replace(/"""/g, "'''")}"""` : "";
   const compose = (direction: string) =>
@@ -59,8 +76,20 @@ export function buildShots(args: {
     const recipe = PHOTOSHOOT_RECIPES[presets[0]?.key ?? ""] ?? [];
     return recipe.map((scene) => ({ presetKey: presets[0]!.key, prompt: compose(scene) }));
   }
+  // Recipe presets (storyboards, keyframes) expand into one image per beat.
+  if (presets.some((p) => p.recipe?.length)) {
+    return presets.flatMap((p) => (p.recipe ?? [p.prompt]).map((beat) => ({ presetKey: p.key, prompt: compose(beat), ...(p.aspect ? { aspectRatio: p.aspect } : {}) })));
+  }
   if (tool.presetMode === "shots") {
-    const base: Shot[] = presets.length ? presets.map((p) => ({ presetKey: p.key, prompt: compose(p.prompt) })) : [{ presetKey: null, prompt: compose("") }];
+    const OUTPAINT = "The source image sits in the center of a larger canvas; the blurred border areas are placeholders. Replace them with a seamless, sharp, natural extension of the scene. Keep the original center unchanged.";
+    const base: Shot[] = presets.length
+      ? presets.map((p) => ({
+          presetKey: p.key,
+          prompt: compose(p.outpaint ? `${OUTPAINT} Final format ${p.aspect}` : p.aspect ? `${p.prompt}, ${p.aspect} format` : p.prompt),
+          ...(p.aspect ? { aspectRatio: p.aspect } : {}),
+          ...(p.outpaint ? { outpaint: true } : {}),
+        }))
+      : [{ presetKey: null, prompt: compose("") }];
     return base.flatMap((s) => Array.from({ length: Math.max(1, variations) }, () => s));
   }
   const style = presets.map((p) => p.prompt).join("; ");

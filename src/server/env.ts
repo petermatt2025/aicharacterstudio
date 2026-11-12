@@ -38,6 +38,8 @@ const schema = z.object({
   OPENAI_IMAGE_OUTPUT_USD_PER_MTOK: z.coerce.number().nonnegative().optional(),
   GEMINI_API_KEY: z.string().optional(),
   GEMINI_IMAGE_MODEL: z.string().default("gemini-3.1-flash-image"),
+  // Text+vision model for Image-to-Prompt (verified available 2026-11-12).
+  GEMINI_TEXT_MODEL: z.string().default("gemini-3.5-flash-lite"),
   // Engine preselected in the studio when both are configured.
   DEFAULT_IMAGE_ENGINE: z.enum(["openai", "gemini"]).default("openai"),
   MODERATION_PROVIDER: z.enum(["openai", "baseline"]).default("openai"),

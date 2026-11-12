@@ -31,7 +31,7 @@ export type FeatureSeed = {
 // only after the real-provider gate passes. Phase 2 tools are teasers; phases 3-4 are roadmap only.
 const p1: ReleaseState = "beta";
 const p2: ReleaseState = "beta"; // Phase 2 tools implemented 2026-11-12 (beta until each passes a real-provider check)
-const p34: ReleaseState = "planned";
+const p34: ReleaseState = "beta"; // Phase 3/4 tools implemented 2026-11-12
 
 export const FEATURES: FeatureSeed[] = [
   { key: "character_angles", toolNumber: 1, name: "Character Angle Generator", studio: "character", phase: 1, minTier: "creator", releaseState: p1, description: "Turn one portrait into front, profile, three-quarter, high and low views." },
@@ -64,7 +64,8 @@ export const FEATURES: FeatureSeed[] = [
   { key: "restore_enhance", toolNumber: 28, name: "Photo Restoration & Enhancement", studio: "scene", phase: 4, minTier: "creator", releaseState: p34, description: "Repair and enhance damaged portraits, with stated limitations." },
   { key: "scene_recreation", toolNumber: 29, name: "Scene Recreation", studio: "scene", phase: 4, minTier: "agency", releaseState: p34, description: "Original recreations inspired by a source composition." },
   { key: "batch_campaigns", toolNumber: 30, name: "Batch Campaign Generator", studio: "ugc_ads", phase: 4, minTier: "agency", releaseState: p34, description: "Queued multi-format images from a campaign brief." },
-  // Cross-cutting capability with its own job type (not one of the 30 tool IDs).
+  // Cross-cutting capabilities (not one of the 30 tool IDs).
+  { key: "image_edit", toolNumber: null, name: "Image Editor", studio: "mixer", phase: 1, minTier: "creator", releaseState: "beta", description: "Edit, enhance, upscale, expand or remove the background of any image." },
   { key: "photoshoot", toolNumber: null, name: "One-Click Photoshoot", studio: "character", phase: 1, minTier: "creator", releaseState: p1, description: "Many varied scenes of one character from a preset recipe." },
 ];
 

@@ -41,12 +41,16 @@ describe("feature gates (server-side)", () => {
     const u = await makeUser({ plan: "agency", beta: false, credits: 50 });
     const c = await upload(u);
     await expect(createQuote(u, { featureKey: "character_angles", references: [{ assetId: c.id, role: "character" }], presetKeys: ["front"] })).rejects.toMatchObject({ code: "feature_unavailable" });
-    await expect(createQuote(u, { featureKey: "before_after", references: [{ assetId: c.id, role: "character" }] })).rejects.toMatchObject({ code: "feature_unavailable" });
-    // Even an admin flipping an unimplemented tool to live cannot make it usable.
-    await q(`UPDATE features SET release_state='live' WHERE key='storyboards'`);
+    // Coming-soon / planned tools are blocked even for admins.
+    await q(`UPDATE features SET release_state='coming_soon' WHERE key='before_after'`);
     const admin = await makeUser({ plan: "agency", admin: true });
-    await expect(createQuote(admin, { featureKey: "storyboards" })).rejects.toMatchObject({ code: "feature_unavailable" });
-    await q(`UPDATE features SET release_state='planned' WHERE key='storyboards'`);
+    await expect(createQuote(admin, { featureKey: "before_after", references: [{ assetId: c.id, role: "character" }], presetKeys: ["side"], prompt: "before: messy; after: tidy" })).rejects.toMatchObject({ code: "feature_unavailable" });
+    await q(`UPDATE features SET release_state='beta' WHERE key='before_after'`);
+    // A feature row without an implementation in this build can never be used, whatever the database says.
+    await q(`INSERT INTO features (key, tool_number, name, studio, phase, release_state, min_tier, description, display_order)
+             VALUES ('test_unimplemented', NULL, 'Test', 'content', 4, 'live', 'free', 'test', 999) ON CONFLICT (key) DO UPDATE SET release_state='live'`);
+    await expect(createQuote(admin, { featureKey: "test_unimplemented" })).rejects.toMatchObject({ code: "feature_unavailable" });
+    await q(`DELETE FROM features WHERE key='test_unimplemented'`);
   });
 
   it("paused tools reject new jobs even with a valid quote", async () => {
@@ -414,6 +418,7 @@ describe("tools", () => {
 describe("phase 2 creator tools", () => {
   beforeAll(async () => {
     await q(`UPDATE features SET release_state='beta' WHERE key IN ('expressions','outfit_swap','style_transform','poses','headshots','ai_twin','thumbnails','social_content','memes')`);
+    await q(`UPDATE features SET release_state='beta' WHERE phase IN (3,4) OR key='image_edit'`);
   });
 
   const cases: Array<[string, string[], string]> = [
@@ -455,5 +460,105 @@ describe("phase 2 creator tools", () => {
     const c = await upload(creator);
     await expect(createQuote(creator, { featureKey: "ai_twin", references: [{ assetId: c.id, role: "character" }], presetKeys: ["neutral_front"] })).rejects.toMatchObject({ code: "plan_required" });
     await expect(createQuote(creator, { featureKey: "expressions", references: [{ assetId: c.id, role: "character" }], presetKeys: ["happy"] })).resolves.toHaveProperty("quoteId");
+  });
+});
+
+
+describe("phase 3/4 tools and the image editor", () => {
+  beforeAll(async () => {
+    await q(`UPDATE features SET release_state='beta' WHERE phase IN (3,4) OR key='image_edit'`);
+  });
+
+  it("product tools take a product and produce one image per selection", async () => {
+    const u = await makeUser({ plan: "agency", credits: 200 });
+    const p = await upload(u, "product");
+    for (const [featureKey, presetKeys, prompt] of [["product_lifestyle", ["kitchen", "desk"], ""], ["digital_mockups", ["tablet"], ""], ["marketplace_images", ["main_white"], ""]] as const) {
+      const { job } = await run(u, { featureKey, references: [{ assetId: p.id, role: "product" }], presetKeys: [...presetKeys], prompt });
+      expect(job.status, featureKey).toBe("succeeded");
+      expect(job.outputs, featureKey).toHaveLength(presetKeys.length);
+    }
+  });
+
+  it("multi-format tools render each format in its own aspect ratio", async () => {
+    const u = await makeUser({ plan: "agency", credits: 200 });
+    const p = await upload(u, "product");
+    const sizes: string[] = [];
+    const fake = new FakeImageProvider();
+    setImageProviderForTests({ name: "fake", model: "fake-ar", capabilities: () => fake.capabilities(), generate: (r) => { sizes.push(r.aspectRatio); return fake.generate(r); } });
+    const { job } = await run(u, { featureKey: "batch_campaigns", references: [{ assetId: p.id, role: "product" }], presetKeys: ["feed", "story", "banner"], prompt: 'sale, headline "40% OFF"' });
+    expect(job.outputs).toHaveLength(3);
+    expect(sizes.sort()).toEqual(["16:9", "1:1", "9:16"]);
+  });
+
+  it("storyboards expand a recipe into one frame per beat", async () => {
+    const u = await makeUser({ plan: "agency", credits: 200 });
+    const quote = await createQuote(u, { featureKey: "storyboards", presetKeys: ["ad6"], prompt: "a mom finds a meal-prep app" });
+    expect(quote.outputs).toBe(6);
+  });
+
+  it("character interactions need consented people in every person slot", async () => {
+    const u = await makeUser({ plan: "agency", credits: 200 });
+    const a = await upload(u);
+    const b = await upload(u);
+    const notPerson = await upload(u, "product");
+    await expect(createQuote(u, { featureKey: "character_interactions", references: [{ assetId: a.id, role: "character" }, { assetId: notPerson.id, role: "other" }], presetKeys: ["talking"] })).rejects.toMatchObject({ code: "consent_required" });
+    fakeCalls.length = 0;
+    const { job } = await run(u, { featureKey: "character_interactions", references: [{ assetId: a.id, role: "character" }, { assetId: b.id, role: "other" }], presetKeys: ["talking"] });
+    expect(job.status).toBe("succeeded");
+    expect(fakeCalls[0]!.prompt).toContain("PERSON 2");
+  });
+
+  it("image editor works on a gallery output; magic edit needs a description; expand sends a widened canvas", async () => {
+    const u = await makeUser({ plan: "agency", credits: 200 });
+    const c = await upload(u);
+    const first = await run(u, { featureKey: "environment_switch", references: [{ assetId: c.id, role: "character" }], presetKeys: ["cafe"] });
+    const outputId = first.job.outputs[0]!.assetId;
+    await expect(createQuote(u, { featureKey: "image_edit", references: [{ assetId: outputId, role: "other" }], presetKeys: ["magic_edit"] })).rejects.toMatchObject({ code: "validation_failed" });
+    const widths: Array<[number, number]> = [];
+    const fake = new FakeImageProvider();
+    setImageProviderForTests({
+      name: "fake", model: "fake-edit", capabilities: () => fake.capabilities(),
+      generate: async (r) => { const m = await inspect(r.referenceImages[0]!.bytes); widths.push([m.width, m.height]); return fake.generate(r); },
+    });
+    const { job } = await run(u, { featureKey: "image_edit", references: [{ assetId: outputId, role: "other" }], presetKeys: ["enhance", "expand_wide"] });
+    expect(job.status).toBe("succeeded");
+    expect(job.outputs).toHaveLength(2);
+    const ratios = widths.map(([w, h]) => w / h).sort((x, y) => x - y);
+    expect(ratios[1]! / ratios[0]!).toBeGreaterThan(1.3); // the expand input is much wider than the original
+    expect(Math.abs(ratios[1]! - 16 / 9)).toBeLessThan(0.02);
+  });
+});
+
+describe("image to prompt", () => {
+  it("analyzes the user's own image via Gemini, parses JSON, and refuses other users' images", async () => {
+    await q(`UPDATE features SET release_state='beta' WHERE key='image_to_prompt'`);
+    const { analyzeImage } = await import("@/server/image-to-prompt");
+    const { resetEnvCache } = await import("@/server/env");
+    const u = await makeUser({ plan: "pro" });
+    const img = await upload(u);
+    const saved = { p: process.env.IMAGE_PROVIDER, g: process.env.GEMINI_API_KEY };
+    process.env.IMAGE_PROVIDER = "openai";
+    process.env.GEMINI_API_KEY = "test-key";
+    resetEnvCache();
+    try {
+      let sent: { url: string; headers: Record<string, string>; body: { contents: Array<{ parts: Array<Record<string, unknown>> }> } } | null = null;
+      const fakeFetch = (async (url: string, init: RequestInit) => {
+        sent = { url, headers: init.headers as Record<string, string>, body: JSON.parse(String(init.body)) };
+        const text = JSON.stringify({ subject: "a person in a blazer", setting: "office", style: "editorial", lighting: "window light", camera: "50mm", mood: "confident", colors: "navy", prompt: "Editorial photo of a confident person in a navy blazer in a bright office, window light, 50mm." });
+        return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text }] } }] }), { status: 200 });
+      }) as unknown as typeof fetch;
+      const out = await analyzeImage(u, { assetId: img.id }, fakeFetch);
+      expect(out.prompt).toMatch(/navy blazer/);
+      expect(out.mood).toBe("confident");
+      expect(sent!.url).toMatch(/:generateContent$/);
+      expect(sent!.headers["x-goog-api-key"]).toBe("test-key");
+      expect(sent!.body.contents[0]!.parts[0]!.inlineData).toBeTruthy();
+      const other = await makeUser({ plan: "pro" });
+      await expect(analyzeImage(other, { assetId: img.id }, fakeFetch)).rejects.toMatchObject({ code: "not_found" });
+    } finally {
+      process.env.IMAGE_PROVIDER = saved.p;
+      if (saved.g === undefined) delete process.env.GEMINI_API_KEY; else process.env.GEMINI_API_KEY = saved.g;
+      resetEnvCache();
+    }
   });
 });

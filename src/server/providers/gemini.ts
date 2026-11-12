@@ -56,7 +56,7 @@ export class GeminiImageProvider implements ImageProvider {
   async generate(input: GenerationRequest): Promise<GenerationResult> {
     const parts: Part[] = [];
     input.referenceImages.forEach((r, i) => {
-      parts.push({ text: `Reference image ${i + 1}: ${ROLE_LABEL[r.role] ?? ROLE_LABEL.other}.` });
+      parts.push({ text: `Reference image ${i + 1}: ${r.label ?? `${ROLE_LABEL[r.role] ?? ROLE_LABEL.other}.`}` });
       parts.push({ inlineData: { mimeType: r.mime, data: r.bytes.toString("base64") } });
     });
     parts.push({ text: input.prompt });

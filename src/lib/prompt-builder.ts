@@ -106,6 +106,23 @@ const TOOL_GROUPS: Record<string, BuilderGroupKey[]> = {
   thumbnails: ["style", "mood", "setting"],
   social_content: ["style", "mood", "lighting", "setting"],
   memes: ["style", "mood", "setting"],
+  character_interactions: ["style", "mood", "lighting", "framing", "wardrobe", "setting"],
+  testimonial_layouts: ["style", "setting"],
+  influencer_campaigns: ["style", "mood", "lighting", "framing", "setting"],
+  before_after: ["style", "lighting"],
+  ad_variations: ["style", "mood", "setting"],
+  fashion_model: ["style", "mood", "lighting", "setting"],
+  product_lifestyle: ["style", "lighting", "setting"],
+  digital_mockups: ["style", "lighting", "setting"],
+  product_demonstrator: ["style", "mood", "lighting", "framing", "setting"],
+  brand_mascots: ["style", "mood", "setting"],
+  marketplace_images: ["style", "lighting"],
+  storyboards: ["style", "mood", "lighting"],
+  video_prep: ["style", "lighting", "wardrobe"],
+  restore_enhance: [],
+  scene_recreation: ["mood", "wardrobe"],
+  batch_campaigns: ["style", "mood", "setting"],
+  image_edit: ["style", "lighting"],
 };
 
 /** Ready-made situations per tool. Text in quotes is rendered as exact on-image text by the text tools. */
@@ -195,8 +212,96 @@ export const TOOL_IDEAS: Record<string, Idea[]> = {
   ],
 };
 
+Object.assign(TOOL_IDEAS, {
+  character_interactions: [
+    { label: "Podcast co-hosts", text: "co-hosts recording an episode in a cozy studio, laughing at a joke" },
+    { label: "Couple at sunset", text: "a happy couple on a beach at sunset, relaxed and affectionate" },
+    { label: "Coach & client", text: "a coach and a client celebrating a breakthrough in a bright office" },
+    { label: "Friends brunch", text: "friends enjoying brunch together at a sunny café terrace" },
+  ],
+  testimonial_layouts: [
+    { label: "Sales page card", text: "testimonial card for a sales page, warm and trustworthy, quote \"PASTE THE REAL QUOTE HERE\" - First name" },
+    { label: "Instagram proof", text: "social-proof post for Instagram, quote \"PASTE THE REAL QUOTE HERE\" - First name" },
+  ],
+  influencer_campaigns: [
+    { label: "Launch week", text: "launch week of a new product, excited and aspirational" },
+    { label: "Summer campaign", text: "summer campaign, sunny and fresh, outdoor lifestyle" },
+    { label: "Holiday gifting", text: "holiday gifting campaign, cozy and festive" },
+  ],
+  before_after: [
+    { label: "Room makeover", text: "before: dull cluttered living room; after: bright, styled, cozy living room" },
+    { label: "Desk glow-up", text: "before: messy desk with cables; after: clean minimal desk setup with plants" },
+    { label: "Brand refresh", text: "before: outdated plain flyer design; after: modern bold branded design" },
+    { label: "Garden", text: "before: overgrown backyard; after: tidy garden with lights and seating" },
+  ],
+  ad_variations: [
+    { label: "Fresh colors", text: "keep the headline and product, try a warmer color palette" },
+    { label: "New hook", text: "same product, focus on a pain point the audience feels" },
+    { label: "Premium look", text: "make it look more premium and minimal" },
+  ],
+  fashion_model: [
+    { label: "Online store", text: "online store product photos, clean and consistent" },
+    { label: "Lookbook", text: "seasonal lookbook with a confident model" },
+    { label: "Instagram drop", text: "new collection drop for Instagram, trendy and bold" },
+  ],
+  product_lifestyle: [
+    { label: "Website hero", text: "hero image for the brand website, aspirational and clean" },
+    { label: "Cozy home", text: "cozy home atmosphere, morning light" },
+    { label: "Premium ad", text: "premium advertising look, dramatic shadows" },
+  ],
+  digital_mockups: [
+    { label: "Ebook launch", text: "ebook launch mockup, clean desk, soft shadows" },
+    { label: "Course bundle", text: "online course bundle with all bonuses displayed" },
+    { label: "App showcase", text: "mobile app showcase, modern and bright" },
+  ],
+  product_demonstrator: [
+    { label: "Kitchen gadget", text: "showing how a kitchen gadget makes cooking faster" },
+    { label: "Skincare routine", text: "applying a skincare product in a bright bathroom" },
+    { label: "Tech accessory", text: "using a tech accessory at a desk, productive" },
+  ],
+  brand_mascots: [
+    { label: "Coffee bean", text: "a cheerful round coffee bean with big eyes and a red scarf, 3D cartoon style" },
+    { label: "Friendly robot", text: "a friendly small robot with rounded shapes and a glowing smile, 3D style" },
+    { label: "Wise owl", text: "a wise but playful owl wearing glasses, flat vector style" },
+    { label: "Fox mascot", text: "an energetic orange fox in a hoodie, modern cartoon style" },
+  ],
+  marketplace_images: [
+    { label: "Amazon set", text: "complete Amazon listing set, clean and professional" },
+    { label: "Etsy handmade", text: "handmade product for Etsy, warm natural look" },
+  ],
+  storyboards: [
+    { label: "App ad", text: "a busy professional discovers an app that saves them two hours a day" },
+    { label: "Coffee story", text: "a quiet morning ritual with a new coffee brand, from sunrise to first sip" },
+    { label: "Course trailer", text: "a beginner learns a new skill and gets their first client" },
+  ],
+  video_prep: [
+    { label: "Walk into café", text: "the character walks into a sunny café, sits down and smiles at the camera" },
+    { label: "Turn to camera", text: "the character looks out of a window, then turns and smiles at the camera" },
+    { label: "Product reveal", text: "the character lifts a product from a table and shows it to the camera" },
+  ],
+  restore_enhance: [
+    { label: "Family photo", text: "old family portrait from the 1960s" },
+    { label: "Wedding photo", text: "vintage wedding photo, the dress was white and the flowers were pink" },
+  ],
+  scene_recreation: [
+    { label: "Same vibe, my city", text: "same vibe but in my own city" },
+    { label: "Magazine cover feel", text: "magazine-cover feel with me as the subject" },
+  ],
+  batch_campaigns: [
+    { label: "Black Friday", text: "Black Friday sale, headline \"40% OFF THIS WEEK\"" },
+    { label: "New launch", text: "new product launch, headline \"IT'S HERE\"" },
+    { label: "Webinar", text: "free live webinar promotion, headline \"FREE LIVE TRAINING\"" },
+  ],
+  image_edit: [
+    { label: "Remove object", text: "remove the object in the background, fill naturally" },
+    { label: "Change outfit color", text: "change the jacket color to navy blue" },
+    { label: "Sunset sky", text: "replace the sky with a warm sunset" },
+  ],
+} satisfies Record<string, Idea[]>);
+
 export function groupsForTool(toolKey: string): BuilderGroup[] {
   const keys = TOOL_GROUPS[toolKey] ?? ["style", "mood", "lighting", "framing"];
+  if (!keys.length) return [];
   return keys.map((k) => BUILDER_GROUPS.find((g) => g.key === k)!).filter(Boolean);
 }
 
@@ -212,7 +317,7 @@ export function buildDirection(toolKey: string, idea: string, choices: BuilderCh
   }
   if (!parts.length) return "";
   // Text tools render quoted text; everything else must not add text.
-  const textTool = ["thumbnails", "social_content", "memes"].includes(toolKey);
+  const textTool = ["thumbnails", "social_content", "memes", "testimonial_layouts", "batch_campaigns"].includes(toolKey);
   parts.push(textTool ? "Text must be spelled exactly as written in quotes, large and easy to read." : QUALITY_TAIL);
   return parts.join(" ");
 }

@@ -1,6 +1,6 @@
 import "server-only";
 import { PLAN_RANK, type PlanKey, type ReleaseState } from "@/lib/catalog";
-import { TOOLS } from "@/lib/tools";
+import { SPECIAL_TOOLS, TOOLS } from "@/lib/tools";
 import type { SessionUser } from "./accounts";
 import { one, q, type Db, pool } from "./db";
 import { AppError } from "./errors";
@@ -71,7 +71,7 @@ export type Access =
 
 /** Single source of truth for feature gating. UI uses the same answer; the server enforces it on quote AND job creation. */
 export async function featureAccess(user: Pick<SessionUser, "planKey" | "isAdmin" | "betaAllowlisted">, f: FeatureRow, db: Db = pool()): Promise<Access> {
-  if (!TOOLS[f.key]) {
+  if (!TOOLS[f.key] && !(SPECIAL_TOOLS as readonly string[]).includes(f.key)) {
     // No implementation in this build: never usable, whatever the database says.
     return { ok: false, reason: f.release_state === "planned" ? "planned" : "not_implemented", message: "This tool is not available yet." };
   }
