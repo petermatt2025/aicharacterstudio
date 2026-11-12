@@ -189,7 +189,8 @@ export async function recentJobs(admin: SessionUser) {
 export async function listUsers(admin: SessionUser, search = "") {
   assertAdmin(admin);
   return q(
-    `SELECT u.id, u.email, u.status, u.is_admin, u.beta_allowlisted, u.email_verified_at, u.created_at, w.id AS workspace_id, w.plan_key, cw.balance
+    `SELECT u.id, u.email, u.status, u.is_admin, u.beta_allowlisted, u.email_verified_at, u.created_at, w.id AS workspace_id, w.plan_key, cw.balance,
+            EXISTS (SELECT 1 FROM subscriptions s WHERE s.workspace_id=w.id AND s.status IN ('active','trialing','past_due')) AS has_subscription
        FROM users u LEFT JOIN workspaces w ON w.owner_user_id=u.id AND w.deleted_at IS NULL LEFT JOIN credit_wallets cw ON cw.workspace_id=w.id
       WHERE u.status <> 'deleted' AND ($1 = '' OR u.email ILIKE '%' || $1 || '%') ORDER BY u.created_at DESC LIMIT 100`,
     [search.slice(0, 100)],
@@ -209,4 +210,37 @@ export async function publishAllBetaTools(admin: SessionUser) {
   const rows = await q<{ key: string }>(`UPDATE features SET release_state='live', updated_at=now() WHERE release_state='beta' AND key = ANY($1) RETURNING key`, [keys]);
   await audit(admin.id, "feature.publish_all", "features", { count: rows.length });
   return { published: rows.length };
+}
+
+export const setPlanSchema = z.object({
+  workspaceId: z.string().uuid(),
+  planKey: z.enum(["free", "creator", "pro", "agency"]),
+  grantCredits: z.boolean().default(false),
+});
+
+/**
+ * Admin: give a workspace a plan by hand (complimentary access, testers, partners). Does not touch Stripe.
+ * If the user pays through Stripe, their plan follows Stripe again at the next billing event.
+ * Optionally adds the plan's monthly credits once (comp plans don't renew credits automatically).
+ */
+export async function adminSetPlan(admin: SessionUser, input: z.input<typeof setPlanSchema>) {
+  assertAdmin(admin);
+  const d = setPlanSchema.parse(input);
+  const ws = await one<{ plan_key: string }>(`SELECT plan_key FROM workspaces WHERE id=$1 AND deleted_at IS NULL`, [d.workspaceId]);
+  if (!ws) throw new AppError("not_found", "Workspace not found");
+  const sub = await one(`SELECT 1 FROM subscriptions WHERE workspace_id=$1 AND status IN ('active','trialing','past_due')`, [d.workspaceId]);
+  let granted = 0;
+  await tx(async (c) => {
+    await c.query(`UPDATE workspaces SET plan_key=$2 WHERE id=$1`, [d.workspaceId, d.planKey]);
+    await audit(admin.id, "workspace.plan_set_by_admin", `workspace:${d.workspaceId}`, { from: ws.plan_key, to: d.planKey, grantCredits: d.grantCredits }, c);
+    if (d.grantCredits && d.planKey !== "free") {
+      const plan = await one<{ monthly_credits: number; display_name: string }>(`SELECT monthly_credits, display_name FROM plan_catalog WHERE key=$1`, [d.planKey], c);
+      if (plan && plan.monthly_credits > 0) {
+        const expires = new Date(Date.now() + 31 * 86400_000);
+        await grantCredits(c, { workspaceId: d.workspaceId, source: "admin", sourceRef: `admin_plan:${crypto.randomUUID()}`, amount: plan.monthly_credits, expiresAt: expires, description: `${plan.display_name} plan credits (given by admin)` });
+        granted = plan.monthly_credits;
+      }
+    }
+  });
+  return { planKey: d.planKey, granted, stripeManaged: !!sub };
 }

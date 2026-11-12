@@ -157,3 +157,22 @@ describe("email delivery failures", () => {
     }
   });
 });
+
+describe("admin plan changes", () => {
+  it("an admin can set a user's plan by hand and optionally add that plan's credits", async () => {
+    const { adminSetPlan } = await import("@/server/admin");
+    const { getBalance } = await import("@/server/credits");
+    const { refresh } = await import("./helpers");
+    const admin = await makeUser({ admin: true });
+    const u = await makeUser({ plan: "free" });
+    const before = (await getBalance(u.workspaceId)).balance;
+    const r = await adminSetPlan(admin, { workspaceId: u.workspaceId, planKey: "pro", grantCredits: true });
+    expect(r).toMatchObject({ planKey: "pro", granted: 650, stripeManaged: false });
+    expect((await refresh(u)).planKey).toBe("pro");
+    expect((await getBalance(u.workspaceId)).balance).toBe(before + 650);
+    await adminSetPlan(admin, { workspaceId: u.workspaceId, planKey: "free" });
+    expect((await refresh(u)).planKey).toBe("free");
+    const notAdmin = await makeUser();
+    await expect(adminSetPlan(notAdmin, { workspaceId: u.workspaceId, planKey: "agency" })).rejects.toMatchObject({ code: "forbidden" });
+  });
+});

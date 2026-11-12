@@ -79,7 +79,7 @@ export function AdminSettings({ settings }: { settings: Array<{ key: string; val
   );
 }
 
-type U = { id: string; email: string; plan_key: string; balance: number | null; beta_allowlisted: boolean; is_admin: boolean; workspace_id: string; email_verified_at: string | null };
+type U = { id: string; email: string; plan_key: string; has_subscription?: boolean; balance: number | null; beta_allowlisted: boolean; is_admin: boolean; workspace_id: string; email_verified_at: string | null };
 export function AdminUsers({ users }: { users: U[] }) {
   const { err, run } = useAction();
   return (
@@ -90,7 +90,20 @@ export function AdminUsers({ users }: { users: U[] }) {
         <thead className="text-left text-muted"><tr><th>Email</th><th>Plan</th><th>Credits</th><th>Verified</th><th>Beta</th><th>Actions</th></tr></thead>
         <tbody>{users.map((u) => (
           <tr key={u.id} className="border-t border-line">
-            <td className="py-1">{u.email}{u.is_admin ? " (admin)" : ""}</td><td>{u.plan_key}</td><td>{u.balance ?? 0}</td><td>{u.email_verified_at ? "yes" : "no"}</td>
+            <td className="py-1">{u.email}{u.is_admin ? " (admin)" : ""}</td><td>
+              <select aria-label={`Plan for ${u.email}`} className={inputCls + " w-28 py-1"} defaultValue={u.plan_key} disabled={!u.workspace_id}
+                onChange={(e) => {
+                  const planKey = e.target.value;
+                  const paid = planKey !== "free";
+                  const warn = u.has_subscription ? "\n\nNote: this user pays through Stripe; their plan will follow Stripe again at their next billing event." : "";
+                  if (!confirm(`Change ${u.email} to ${planKey.toUpperCase()}?${warn}`)) { e.target.value = u.plan_key; return; }
+                  const grant = paid && confirm(`Also add the ${planKey} plan's monthly credits now? (Given by hand, they expire in 31 days and don't renew automatically.)`);
+                  run(() => api("/api/admin/users", { body: { action: "set_plan", workspaceId: u.workspace_id, planKey, grantCredits: grant } }));
+                }}>
+                {["free", "creator", "pro", "agency"].map((k) => <option key={k} value={k}>{k}</option>)}
+              </select>
+              {u.has_subscription && <span className="ml-1 text-[10px] text-muted" title="Pays through Stripe">$</span>}
+            </td><td>{u.balance ?? 0}</td><td>{u.email_verified_at ? "yes" : "no"}</td>
             <td><input type="checkbox" aria-label={`Beta access for ${u.email}`} defaultChecked={u.beta_allowlisted} onChange={(e) => run(() => api("/api/admin/users", { body: { action: "beta", userId: u.id, on: e.target.checked } }))} /></td>
             <td className="whitespace-nowrap">
               <Button variant="ghost" onClick={() => { const n = Number(prompt("Credits to grant", "10")); const note = prompt("Reason (audited)") ?? ""; if (n > 0 && u.workspace_id) run(() => api("/api/admin/users", { body: { action: "grant", workspaceId: u.workspace_id, amount: n, note } })); }}>Grant…</Button>
