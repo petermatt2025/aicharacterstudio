@@ -1,6 +1,6 @@
 // Generation worker: run with `npm run worker`. Runs separately from the web app (never inside a request).
 import os from "node:os";
-import { claimJob, processJob, reapExhaustedJobs } from "../server/jobs";
+import { claimJob, processJob, reapExhaustedJobs, releaseWorkerJobs } from "../server/jobs";
 import { sweepAllExpired } from "../server/credits";
 import { allocateAnnualCredits, billingConfigured } from "../server/billing";
 import { pruneRateLimits } from "../server/rate-limit";
@@ -50,6 +50,11 @@ async function main() {
     if (stopping) return;
     stopping = true;
     log("info", "worker.stopping", { workerId });
+    // Don't make users wait for a redeploy: requeue in-flight jobs now, then exit.
+    releaseWorkerJobs(workerId)
+      .then((n) => log("info", "worker.released_jobs", { workerId, jobs: n }))
+      .catch((err) => log("error", "worker.release_failed", { error: (err as Error).message }))
+      .finally(() => closePool().finally(() => process.exit(0)));
   };
   process.on("SIGTERM", shutdown);
   process.on("SIGINT", shutdown);

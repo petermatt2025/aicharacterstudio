@@ -1,7 +1,7 @@
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import crypto from "node:crypto";
 import { cancelJob, createJob, createQuote, getJob } from "@/server/generation";
-import { claimJob, drainQueue, processJob } from "@/server/jobs";
+import { claimJob, drainQueue, processJob, releaseWorkerJobs } from "@/server/jobs";
 import { FakeImageProvider, fakeCalls } from "@/server/providers/fake";
 import { setImageProviderForTests } from "@/server/providers";
 import { ProviderError, type GenerationRequest } from "@/server/providers/types";
@@ -353,6 +353,21 @@ describe("tools", () => {
     expect(row!.request.engine).toBe("gemini");
     // @ts-expect-error not an engine
     await expect(createQuote(u, { featureKey: "environment_switch", references: [{ assetId: c.id, role: "character" }], presetKeys: ["cafe"], engine: "midjourney" })).rejects.toThrow();
+  });
+
+  it("a stopping worker hands its running jobs back immediately without using up an attempt", async () => {
+    const u = await makeUser({ plan: "pro", credits: 50 });
+    const c = await upload(u);
+    const quote = await createQuote(u, { featureKey: "environment_switch", references: [{ assetId: c.id, role: "character" }], presetKeys: ["cafe"] });
+    const { jobId } = await createJob(u, { quoteId: quote.quoteId, idempotencyKey: key() });
+    let claimed = await claimJob("host-a:1:0");
+    while (claimed && claimed.id !== jobId) claimed = await claimJob("host-a:1:0");
+    expect(claimed!.attempts).toBe(1);
+    expect(await releaseWorkerJobs("host-a:1")).toBeGreaterThanOrEqual(1);
+    const row = await one<{ status: string; attempts: number; locked_by: string | null }>(`SELECT status, attempts, locked_by FROM generation_jobs WHERE id=$1`, [jobId]);
+    expect(row).toEqual({ status: "queued", attempts: 0, locked_by: null });
+    await drainQueue("host-b");
+    expect((await getJob(u, jobId)).status).toBe("succeeded");
   });
 
   it("free-plan outputs are watermarked and downscaled", async () => {

@@ -42,6 +42,19 @@ export async function claimJob(workerId: string): Promise<JobRow | null> {
   );
 }
 
+/**
+ * Graceful shutdown: hand this worker's running jobs back to the queue right away (instead of waiting for the
+ * lease to expire) so a new worker continues them. Delivered outputs are kept; the attempt is not counted.
+ */
+export async function releaseWorkerJobs(workerIdPrefix: string): Promise<number> {
+  const r = await q<{ id: string }>(
+    `UPDATE generation_jobs SET status='queued', locked_by=NULL, lease_expires_at=NULL, run_after=now(), attempts=GREATEST(attempts-1, 0)
+      WHERE status='running' AND (locked_by=$1 OR locked_by LIKE $1 || ':%') RETURNING id`,
+    [workerIdPrefix],
+  );
+  return r.length;
+}
+
 async function heartbeat(jobId: string, workerId: string): Promise<{ owned: boolean; cancel: boolean }> {
   const r = await one<{ cancel_requested: boolean }>(
     `UPDATE generation_jobs SET lease_expires_at=now() + ($3 || ' seconds')::interval WHERE id=$1 AND locked_by=$2 AND status='running' RETURNING cancel_requested`,
