@@ -53,3 +53,7 @@ _Last updated: 2026-11-11_
 - Style boards (moodboards): /styles page, up to 12 images per board, Gemini "Describe this style", applied in any tool as
   one style-sheet reference + style notes; Image Editor "Apply style board" and Gallery "Restyle". Workspace-private.
 - 20 art styles (anime, pop art, comic, pixel art, cyberpunk…) in the prompt builder; art styles override photoreal framing.
+- Text Studio (/text/:assetId): exact text layers on any image, 11 self-hosted fonts, colour/outline/shadow/frame/
+  position/rotation/spacing, 8 one-click looks; saved as a NEW image after text + image moderation (free, no AI).
+- Landing page redesigned ("sunset vivid"); showcase images are real gpt-image-2 outputs of fictional people.
+- OpenAI account ran out of credit on 2026-11-12: the OpenAI engine fails until topped up (now detected as non-retryable).

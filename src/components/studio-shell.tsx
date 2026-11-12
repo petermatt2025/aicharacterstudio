@@ -369,6 +369,7 @@ function JobPanel({ job, onCancel, onRegenerate }: { job: Job; onCancel: () => v
                 <img src={fileUrl(o.assetId, { thumb: true })} alt={`Generated image ${o.index + 1}`} className="aspect-square w-full object-cover" />
               </a>
               <a href={fileUrl(o.assetId, { download: true })} className="absolute bottom-1 right-1 rounded bg-black/70 px-2 py-0.5 text-xs">Download</a>
+              <a href={`/text/${o.assetId}`} className="absolute bottom-1 left-1 rounded bg-black/70 px-2 py-0.5 text-xs">Aa Add text</a>
             </li>
           ))}
         </ul>

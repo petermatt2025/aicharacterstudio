@@ -81,6 +81,7 @@ export default function Gallery() {
                   {EDIT_ACTIONS.map(([preset, label]) => (
                     <a key={preset} href={`/studio/image_edit?source=${a.id}&preset=${preset}`} className="rounded-full border border-line px-2 py-0.5 text-muted hover:border-accent hover:text-ink">{label}</a>
                   ))}
+                  <a href={`/text/${a.id}`} className="rounded-full border border-line px-2 py-0.5 text-muted hover:border-accent hover:text-ink">Aa Add text</a>
                   <a href={`/studio/image_to_prompt?source=${a.id}`} className="rounded-full border border-line px-2 py-0.5 text-muted hover:border-accent hover:text-ink">Get prompt</a>
                 </div>
               </div>

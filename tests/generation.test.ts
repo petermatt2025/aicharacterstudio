@@ -608,3 +608,28 @@ describe("style boards", () => {
     await expect(getBoard(u, empty.id)).rejects.toMatchObject({ code: "not_found" });
   });
 });
+
+describe("text studio", () => {
+  it("saves a same-size edited copy as a new image, moderates the words, and protects other users' images", async () => {
+    const { saveTextOverlay } = await import("@/server/text-overlay");
+    const { getAsset } = await import("@/server/assets");
+    const sharp = (await import("sharp")).default;
+    const u = await makeUser({ plan: "pro", credits: 20 });
+    const src = await upload(u);
+    const meta = await getAsset(u, src.id);
+    const same = await sharp({ create: { width: meta.width, height: meta.height, channels: 3, background: "#ff00aa" } }).png().toBuffer();
+    const wrong = await sharp({ create: { width: meta.width + 50, height: meta.height, channels: 3, background: "#ff00aa" } }).png().toBuffer();
+
+    const out = await saveTextOverlay(u, src.id, same, { texts: ["5 AI TOOLS"] });
+    expect(out.id).not.toBe(src.id);
+    expect(out.kind).toBe("output");
+    expect(out.provenance).toMatchObject({ source: "text_overlay", sourceAssetId: src.id });
+    expect((await getAsset(u, src.id)).id).toBe(src.id); // original still there
+
+    await expect(saveTextOverlay(u, src.id, wrong, { texts: ["hi"] })).rejects.toMatchObject({ code: "validation_failed" });
+    await expect(saveTextOverlay(u, src.id, same, { texts: ["   "] })).rejects.toMatchObject({ code: "validation_failed" });
+    await expect(saveTextOverlay(u, src.id, same, { texts: ["a nude photo"] })).rejects.toMatchObject({ code: "moderation_blocked" });
+    const other = await makeUser({ plan: "pro" });
+    await expect(saveTextOverlay(other, src.id, same, { texts: ["hi"] })).rejects.toMatchObject({ code: "not_found" });
+  });
+});
