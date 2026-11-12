@@ -105,14 +105,12 @@ export async function processJob(job: JobRow, workerId: string, provider: ImageP
   const warnings: string[] = [];
   let failure: { code: string; message: string } | null = null;
 
-  for (let index = 0; index < snap.shots.length; index++) {
-    if (done.has(index)) continue;
+  type ShotResult = { kind: "ok" } | { kind: "lease_lost" } | { kind: "cancel" } | { kind: "retry"; pe: ProviderError } | { kind: "fail"; failure: { code: string; message: string } };
+
+  const runShot = async (index: number): Promise<ShotResult> => {
     const hb = await heartbeat(job.id, workerId);
-    if (!hb.owned) return "lease_lost";
-    if (hb.cancel) {
-      failure = { code: "canceled", message: "Canceled; you were charged only for images already delivered." };
-      break;
-    }
+    if (!hb.owned) return { kind: "lease_lost" };
+    if (hb.cancel) return { kind: "cancel" };
     const shot = snap.shots[index]!;
     const t0 = Date.now();
     try {
@@ -126,7 +124,7 @@ export async function processJob(job: JobRow, workerId: string, provider: ImageP
         requestedOutputs: 1,
         aspectRatio: snap.aspectRatio,
         quality: snap.quality,
-        options: { identityStrength: snap.identityStrength, callIndex: done.size },
+        options: { identityStrength: snap.identityStrength, callIndex: index },
       });
       await q(
         `INSERT INTO usage_events (job_id, workspace_id, feature_key, provider, model, operation, attempt, success, usage, cost_usd, duration_ms) VALUES ($1,$2,$3,$4,$5,$6,$7,true,$8,$9,$10)`,
@@ -139,6 +137,7 @@ export async function processJob(job: JobRow, workerId: string, provider: ImageP
       const stored = await storeOutput(job, index, out.bytes, res.provider, res.model);
       if (stored === "flagged") warnings.push(`Image ${index + 1} was withheld by output moderation.`);
       else done.add(index);
+      return { kind: "ok" };
     } catch (e) {
       const pe = e instanceof ProviderError ? e : new ProviderError("transient", (e as Error).message ?? "error");
       await q(
@@ -146,28 +145,57 @@ export async function processJob(job: JobRow, workerId: string, provider: ImageP
         [job.id, job.workspace_id, job.feature_key, provider.name, provider.model, referenceImages.length ? "edit" : "generate", job.attempts, pe.kind, JSON.stringify(pe.usage), Date.now() - t0],
       );
       log("warn", "job.provider_error", { jobId: job.id, kind: pe.kind, attempt: job.attempts });
-      if (pe.retryable && job.attempts < job.max_attempts) {
-        await q(
-          `UPDATE generation_jobs SET status='queued', locked_by=NULL, lease_expires_at=NULL, run_after=now() + ($3 || ' seconds')::interval, error_code=$4, error_message=$5,
-                  outputs_delivered=$6 WHERE id=$1 AND locked_by=$2`,
-          [job.id, workerId, String(backoffSeconds(job.attempts)), pe.kind, "Retrying after a temporary provider problem…", done.size],
-        );
-        return "retry_scheduled";
-      }
-      failure =
-        pe.kind === "moderation"
-          ? { code: "moderation_blocked", message: "The provider's safety system blocked this request. Unused credits were returned." }
-          : pe.kind === "auth"
-            ? { code: "provider_unavailable", message: "Image generation is temporarily unavailable. Unused credits were returned." }
-            : { code: pe.kind, message: `Generation failed (${pe.kind}). Unused credits were returned.` };
+      if (pe.retryable && job.attempts < job.max_attempts) return { kind: "retry", pe };
       if (pe.kind === "auth") log("error", "provider.auth_failure", { provider: provider.name });
-      break;
+      return {
+        kind: "fail",
+        failure:
+          pe.kind === "moderation"
+            ? { code: "moderation_blocked", message: "The provider's safety system blocked this request. Unused credits were returned." }
+            : pe.kind === "auth"
+              ? { code: "provider_unavailable", message: "Image generation is temporarily unavailable. Unused credits were returned." }
+              : { code: pe.kind, message: `Generation failed (${pe.kind}). Unused credits were returned.` },
+      };
     }
+  };
+
+  // Shots run in parallel (bounded) so a multi-image job takes about as long as its slowest image.
+  const pending = snap.shots.map((_, i) => i).filter((i) => !done.has(i));
+  const results: ShotResult[] = [];
+  let next = 0;
+  await Promise.all(
+    Array.from({ length: Math.min(SHOT_CONCURRENCY, pending.length) }, async () => {
+      while (next < pending.length) {
+        const r = await runShot(pending[next++]!);
+        results.push(r);
+        if (r.kind === "lease_lost" || r.kind === "cancel") next = pending.length; // stop starting new shots
+      }
+    }),
+  );
+
+  if (results.some((r) => r.kind === "lease_lost")) return "lease_lost";
+  const hardFail = results.find((r): r is Extract<ShotResult, { kind: "fail" }> => r.kind === "fail");
+  const retry = results.find((r): r is Extract<ShotResult, { kind: "retry" }> => r.kind === "retry");
+  if (results.some((r) => r.kind === "cancel")) {
+    failure = { code: "canceled", message: "Canceled; you were charged only for images already delivered." };
+  } else if (hardFail) {
+    failure = hardFail.failure;
+  } else if (retry) {
+    // Delivered outputs are kept (idempotent by index); only the missing ones run again.
+    await q(
+      `UPDATE generation_jobs SET status='queued', locked_by=NULL, lease_expires_at=NULL, run_after=now() + ($3 || ' seconds')::interval, error_code=$4, error_message=$5,
+              outputs_delivered=$6 WHERE id=$1 AND locked_by=$2`,
+      [job.id, workerId, String(backoffSeconds(job.attempts)), retry.pe.kind, "Retrying after a temporary provider problem…", done.size],
+    );
+    return "retry_scheduled";
   }
   const result = await finalize(job, workerId, failure, warnings);
   log("info", "job.finished", { jobId: job.id, result, ms: Date.now() - started });
   return result;
 }
+
+/** Max provider calls in flight per job (keeps within provider rate limits). */
+const SHOT_CONCURRENCY = 4;
 
 async function storeOutput(job: JobRow, index: number, raw: Buffer, provider: string, model: string): Promise<"stored" | "flagged"> {
   const snap = job.request;

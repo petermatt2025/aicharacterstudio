@@ -56,6 +56,11 @@ export async function getPlan(key: string, db: Db = pool()) {
   return p;
 }
 
+/** Plan whose limits apply to this user. Admins (the owner) always get the top plan's limits. */
+export function limitsPlanKey(user: Pick<SessionUser, "planKey" | "isAdmin">): SessionUser["planKey"] {
+  return user.isAdmin ? "agency" : user.planKey;
+}
+
 export async function listPlans() {
   return q<PlanRow>(`SELECT * FROM plan_catalog ORDER BY rank`);
 }

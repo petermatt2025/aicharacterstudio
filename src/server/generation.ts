@@ -5,7 +5,7 @@ import { TOOLS, type ToolDef } from "@/lib/tools";
 import type { SessionUser } from "./accounts";
 import { one, q, tx } from "./db";
 import { AppError } from "./errors";
-import { assertFeatureAccess, getPlan, type FeatureRow } from "./entitlements";
+import { assertFeatureAccess, getPlan, limitsPlanKey, type FeatureRow } from "./entitlements";
 import { reserveCredits, settleReservation, getBalance } from "./credits";
 import { moderate } from "./moderation";
 import { rateLimit } from "./rate-limit";
@@ -102,7 +102,7 @@ export async function createQuote(user: SessionUser, input: z.input<typeof quote
   if (!tool) throw new AppError("feature_unavailable", "This tool is not available yet.");
   const f = await assertFeatureAccess(user, req.featureKey);
   await rateLimit(`quote:${user.id}`, await getSetting<number>("rate_limit_quotes_per_minute"), 60);
-  const plan = await getPlan(user.planKey);
+  const plan = await getPlan(limitsPlanKey(user));
 
   // Resolve references: explicit slots + saved character profile.
   const refs: Array<{ assetId: string; role: ReferenceRole }> = [];
@@ -238,9 +238,9 @@ export async function createJob(user: SessionUser, input: z.input<typeof createJ
     if (!quote) throw new AppError("not_found", "Quote not found");
     if (quote.used_at) throw new AppError("quote_used", "This quote was already used. Request a new quote.");
     if (quote.expired) throw new AppError("quote_expired", "This quote expired. Request a new quote.");
-    if (quote.plan_key !== user.planKey) throw new AppError("quote_expired", "Your plan changed since this quote. Request a new quote.");
+    if (quote.plan_key !== limitsPlanKey(user)) throw new AppError("quote_expired", "Your plan changed since this quote. Request a new quote.");
     await assertFeatureAccess(user, quote.feature_key, c);
-    const plan = await getPlan(user.planKey, c);
+    const plan = await getPlan(limitsPlanKey(user), c);
     const active = await one<{ n: number; today: number }>(
       `SELECT count(*) FILTER (WHERE status IN ('queued','running'))::int AS n, count(*) FILTER (WHERE created_at > now() - interval '24 hours')::int AS today
          FROM generation_jobs WHERE workspace_id=$1`,

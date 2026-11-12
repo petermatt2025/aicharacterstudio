@@ -9,6 +9,7 @@ import { one, q, tx } from "./db";
 import { env } from "./env";
 import { AppError } from "./errors";
 import { EXT, makeThumbnail, sanitizeImage } from "./images";
+import { limitsPlanKey } from "./entitlements";
 import { moderate } from "./moderation";
 import { rateLimit } from "./rate-limit";
 import { getSetting } from "./seed";
@@ -64,7 +65,7 @@ export async function uploadAsset(user: SessionUser, meta: z.input<typeof upload
   const clean = await sanitizeImage(bytes, { maxBytes: env().MAX_UPLOAD_BYTES });
   const quotas = await getSetting<Record<string, number>>("storage_quota_mb");
   const used = await one<{ bytes: number }>(`SELECT COALESCE(sum(bytes),0)::bigint AS bytes FROM assets WHERE workspace_id=$1 AND deleted_at IS NULL`, [user.workspaceId]);
-  if ((used?.bytes ?? 0) + clean.bytes.length > (quotas[user.planKey] ?? 200) * 1024 * 1024) {
+  if ((used?.bytes ?? 0) + clean.bytes.length > (quotas[limitsPlanKey(user)] ?? 200) * 1024 * 1024) {
     throw new AppError("file_too_large", "Storage quota reached. Delete unused images or upgrade your plan.");
   }
 

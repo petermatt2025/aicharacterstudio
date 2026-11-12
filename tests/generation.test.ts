@@ -314,6 +314,37 @@ describe("tools", () => {
     await expect(createQuote(free, { featureKey: "photoshoot", presetKeys: ["professional"] })).rejects.toMatchObject({ code: "plan_required" });
   });
 
+  it("admins get top-plan limits even on the Free plan (more images per job, photoshoot, no watermark)", async () => {
+    const admin = await makeUser({ plan: "free", admin: true, credits: 200 });
+    const c = await upload(admin);
+    const { quote, job } = await run(admin, { featureKey: "character_angles", references: [{ assetId: c.id, role: "character" }], presetKeys: ["front", "profile", "three_quarter", "low"] });
+    expect(quote.outputs).toBe(4);
+    expect(job.status).toBe("succeeded");
+    expect(job.outputs).toHaveLength(4);
+    const shoot = await createQuote(admin, { featureKey: "photoshoot", references: [{ assetId: c.id, role: "character" }], presetKeys: ["professional"] });
+    expect(shoot.outputs).toBe(6);
+  });
+
+  it("images in one job are generated in parallel", async () => {
+    const u = await makeUser({ plan: "pro", credits: 100 });
+    const c = await upload(u);
+    const fake = new FakeImageProvider();
+    let inFlight = 0;
+    let peak = 0;
+    setImageProviderForTests({
+      name: "fake", model: "fake-slow", capabilities: () => fake.capabilities(),
+      generate: async (r: GenerationRequest) => {
+        peak = Math.max(peak, ++inFlight);
+        await new Promise((res) => setTimeout(res, 150));
+        inFlight--;
+        return fake.generate(r);
+      },
+    });
+    const { job } = await run(u, { featureKey: "character_angles", references: [{ assetId: c.id, role: "character" }], presetKeys: ["front", "profile", "three_quarter", "low"] });
+    expect(job.outputs).toHaveLength(4);
+    expect(peak).toBe(4);
+  });
+
   it("free-plan outputs are watermarked and downscaled", async () => {
     await q(`INSERT INTO plan_entitlements (plan_key, feature_key, is_enabled) VALUES ('free','environment_switch',true) ON CONFLICT (plan_key, feature_key) DO UPDATE SET is_enabled=true`);
     try {
