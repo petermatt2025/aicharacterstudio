@@ -10,6 +10,7 @@ const LINKS = [
   ["/studio", "Studio"],
   ["/library", "Library"],
   ["/gallery", "Gallery"],
+  ["/styles", "Style boards"],
   ["/campaigns", "Campaigns"],
   ["/billing", "Billing"],
   ["/settings", "Settings"],

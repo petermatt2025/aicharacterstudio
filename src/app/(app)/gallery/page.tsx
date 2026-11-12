@@ -12,6 +12,7 @@ const EDIT_ACTIONS: Array<[string, string]> = [
   ["expand_wide", "Expand"],
   ["remove_bg", "Remove BG"],
   ["variation", "Variation"],
+  ["apply_style", "🎨 Restyle"],
 ];
 
 export default function Gallery() {

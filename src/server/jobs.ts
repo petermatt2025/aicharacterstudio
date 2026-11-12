@@ -5,6 +5,8 @@ import { one, q, tx } from "./db";
 import { settleReservation } from "./credits";
 import { imageProvider } from "./providers";
 import { TOOLS } from "@/lib/tools";
+import { boardImagesForJob, styleSheet } from "./style-boards";
+import { STYLE_SHEET_LABEL } from "./prompting";
 import { ProviderError, type AspectRatio, type ImageProvider, type ReferenceRole } from "./providers/types";
 import { applyWatermark, makeThumbnail, resizeLongEdge, sanitizeImage, EXT } from "./images";
 import { storage } from "./storage";
@@ -140,6 +142,12 @@ export async function processJob(job: JobRow, workerId: string, providerOverride
   let referenceImages = await Promise.all(
     inputs.map(async (i) => ({ role: i.role, bytes: await storage().get(i.storage_key), mime: i.mime, label: slots.find((sl) => sl.role === i.role)?.promptLabel })),
   );
+  const warnings: string[] = [];
+  if (snap.style) {
+    const imgs = await boardImagesForJob(job.workspace_id, snap.style.assetIds);
+    if (imgs.length) referenceImages.push({ role: "style", bytes: await styleSheet(imgs), mime: "image/png", label: STYLE_SHEET_LABEL });
+    else warnings.push("The style board's images were deleted, so the style could not be applied.");
+  }
   const caps = await provider.capabilities();
   if (referenceImages.length > caps.maxReferenceImages) {
     const keep = referenceImages.slice(0, Math.max(0, caps.maxReferenceImages - 1));
@@ -148,7 +156,6 @@ export async function processJob(job: JobRow, workerId: string, providerOverride
   }
 
   const done = new Set((await q<{ output_index: number }>(`SELECT output_index FROM generation_job_outputs WHERE job_id=$1`, [job.id])).map((r) => r.output_index));
-  const warnings: string[] = [];
   let failure: { code: string; message: string } | null = null;
 
   type ShotResult = { kind: "ok" } | { kind: "lease_lost" } | { kind: "cancel" } | { kind: "retry"; pe: ProviderError } | { kind: "fail"; failure: { code: string; message: string } };

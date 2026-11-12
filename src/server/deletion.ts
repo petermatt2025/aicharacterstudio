@@ -42,6 +42,7 @@ export async function deleteAccount(user: SessionUser, password: string, reason?
         const assets = await q<{ storage_key: string; thumb_key: string | null }>(`UPDATE assets SET deleted_at=now() WHERE workspace_id=$1 AND deleted_at IS NULL RETURNING storage_key, thumb_key`, [w.id], c);
         for (const a of assets) keys.push(a.storage_key, ...(a.thumb_key ? [a.thumb_key] : []));
         await c.query(`UPDATE character_profiles SET deleted_at=now(), name='deleted', notes='' WHERE workspace_id=$1`, [w.id]);
+        await c.query(`UPDATE style_boards SET deleted_at=now(), name='deleted', description='' WHERE workspace_id=$1`, [w.id]);
         await c.query(`UPDATE workspaces SET deleted_at=now(), name='deleted', plan_key='free' WHERE id=$1`, [w.id]);
       }
       await c.query(`DELETE FROM sessions WHERE user_id=$1`, [user.id]);

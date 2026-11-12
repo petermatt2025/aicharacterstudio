@@ -11,6 +11,7 @@ import { moderate } from "./moderation";
 import { rateLimit } from "./rate-limit";
 import { getSetting } from "./seed";
 import { availableEngines, ENGINES, imageProvider, type Engine } from "./providers";
+import { getBoard } from "./style-boards";
 import { APP_MAX_REFERENCES } from "./providers/capabilities";
 import { buildShots, type Shot } from "./prompting";
 import type { AspectRatio, Quality, ReferenceRole } from "./providers/types";
@@ -29,6 +30,7 @@ export const quoteRequestSchema = z.object({
   variations: z.number().int().min(1).max(4).default(1),
   identityStrength: z.enum(["loose", "balanced", "strict"]).optional(),
   engine: z.enum(ENGINES).optional(),
+  styleBoardId: z.string().uuid().optional(),
 });
 export type QuoteRequest = z.infer<typeof quoteRequestSchema>;
 
@@ -49,6 +51,8 @@ export type JobSnapshot = {
   collageOverflow: boolean;
   /** Image engine chosen for this job (absent on jobs created before engines existed → default). */
   engine?: Engine;
+  /** Style board applied to every image (sent as one style-sheet reference). */
+  style?: { boardId: string; name: string; assetIds: string[]; description: string };
 };
 
 type Rules = Record<string, { credits: number; per_outputs: number }>;
@@ -176,7 +180,17 @@ export async function createQuote(user: SessionUser, input: z.input<typeof quote
   }
 
   const variations = tool.allowVariations ? req.variations : 1;
-  const shots = buildShots({ tool, roles: refs.map((r) => r.role), presetKeys, userPrompt: req.prompt, identityStrength, variations });
+  // Style board (moodboard): its images become one style-sheet reference; its description guides every shot.
+  let style: JobSnapshot["style"];
+  if (req.styleBoardId) {
+    const board = await getBoard(user, req.styleBoardId);
+    if (!board.asset_ids.length) throw new AppError("validation_failed", "This style board has no images yet.");
+    style = { boardId: board.id, name: board.name, assetIds: board.asset_ids.slice(0, 9), description: board.description };
+  }
+  for (const k of presetKeys) {
+    if (tool.presets.find((p) => p.key === k)?.needsStyle && !style) throw new AppError("validation_failed", "Choose a style board to apply.");
+  }
+  const shots = buildShots({ tool, roles: refs.map((r) => r.role), presetKeys, userPrompt: req.prompt, identityStrength, variations, style: style ? { description: style.description } : null });
   const outputs = shots.length;
   if (tool.key !== "photoshoot" && outputs > plan.max_outputs_per_job) {
     throw new AppError("plan_required", `Your plan allows up to ${plan.max_outputs_per_job} images per generation.`);
@@ -200,7 +214,7 @@ export async function createQuote(user: SessionUser, input: z.input<typeof quote
 
   const ruleRows = await q<{ key: string; credits: string; per_outputs: number }>(`SELECT key, credits, per_outputs FROM credit_rules`);
   const rules: Rules = Object.fromEntries(ruleRows.map((r) => [r.key, { credits: Number(r.credits), per_outputs: r.per_outputs }]));
-  const calc = computeCredits({ tool, rules, refs: refs.length, quality: req.quality, identityStrength, outputs, multiplier: Number(f.credit_multiplier) });
+  const calc = computeCredits({ tool, rules, refs: refs.length + (style ? 1 : 0), quality: req.quality, identityStrength, outputs, multiplier: Number(f.credit_multiplier) });
 
   const snapshot: JobSnapshot = {
     featureKey: req.featureKey,
@@ -217,6 +231,7 @@ export async function createQuote(user: SessionUser, input: z.input<typeof quote
     maxLongEdgePx: plan.max_long_edge_px,
     collageOverflow,
     engine,
+    ...(style ? { style } : {}),
   };
   const ttl = await getSetting<number>("quote_ttl_seconds");
   const breakdown = { ...calc, outputs, warnings, provider: provider.name, chargePolicy: "You are charged only for images delivered. Unused credits are returned automatically." };

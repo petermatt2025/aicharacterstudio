@@ -22,6 +22,26 @@ export const BUILDER_GROUPS: BuilderGroup[] = [
       { key: "bright", label: "Bright & airy", text: "bright and airy, pastel tones, soft high-key exposure" },
       { key: "moody", label: "Dark & moody", text: "dark and moody, deep shadows, rich contrast" },
       { key: "bold", label: "Bold & colorful", text: "bold saturated colors, high contrast, punchy and eye-catching" },
+      { key: "anime", label: "Anime", text: "high-quality anime illustration, clean line art, cel shading, vibrant colors" },
+      { key: "animated3d", label: "3D animated", text: "3D animated movie style, soft global illumination, expressive stylized features" },
+      { key: "pop_art", label: "Pop art", text: "bold pop art, flat bright colors, halftone dots, thick black outlines" },
+      { key: "comic", label: "Comic book", text: "comic book illustration, ink outlines, dramatic shading, halftone texture" },
+      { key: "watercolor", label: "Watercolor", text: "soft watercolor painting on textured paper, delicate washes" },
+      { key: "oil", label: "Oil painting", text: "classical oil painting, visible brush strokes, rich glazes" },
+      { key: "pencil", label: "Pencil sketch", text: "detailed graphite pencil sketch, cross-hatching" },
+      { key: "pixel", label: "Pixel art", text: "retro 16-bit pixel art, limited palette, crisp pixels" },
+      { key: "clay", label: "Claymation", text: "claymation stop-motion look, handmade clay textures" },
+      { key: "cyberpunk", label: "Cyberpunk", text: "cyberpunk aesthetic, neon magenta and cyan, rainy futuristic city glow" },
+      { key: "synthwave", label: "Synthwave", text: "80s synthwave, neon grid, purple-pink sunset gradients" },
+      { key: "fantasy", label: "Fantasy art", text: "epic fantasy digital painting, magical atmosphere, dramatic lighting" },
+      { key: "vector", label: "Flat vector", text: "clean flat vector illustration, simple shapes, solid colors" },
+      { key: "lowpoly", label: "Low poly", text: "low-poly 3D style, faceted geometric shapes" },
+      { key: "ukiyoe", label: "Japanese woodblock", text: "traditional Japanese woodblock print style, flat colors, fine outlines, textured paper" },
+      { key: "stained_glass", label: "Stained glass", text: "stained glass artwork, bold lead lines, glowing jewel colors" },
+      { key: "sticker", label: "Sticker", text: "die-cut sticker design, thick white border, glossy vibrant colors" },
+      { key: "noir", label: "Film noir", text: "black and white film noir, hard shadows, venetian-blind light" },
+      { key: "polaroid", label: "Polaroid", text: "instant polaroid photo, soft faded colors, white frame" },
+      { key: "chibi", label: "Chibi", text: "cute chibi style, big head, small body, kawaii expressions" },
     ],
   },
   {
@@ -305,20 +325,27 @@ export function groupsForTool(toolKey: string): BuilderGroup[] {
   return keys.map((k) => BUILDER_GROUPS.find((g) => g.key === k)!).filter(Boolean);
 }
 
+/** Non-photographic styles (they replace the photoreal default). */
+export const ART_STYLES = new Set(["anime", "animated3d", "pop_art", "comic", "watercolor", "oil", "pencil", "pixel", "clay", "cyberpunk", "synthwave", "fantasy", "vector", "lowpoly", "ukiyoe", "stained_glass", "sticker", "chibi"]);
+const ART_TAIL = "Clean, consistent artwork, no watermarks, no random text.";
+
 const QUALITY_TAIL = "Sharp focus, natural anatomy and hands, realistic proportions, no watermarks, no random text.";
 
 /** Compose an editable direction prompt from an idea + chosen options. Empty choices produce an empty string. */
 export function buildDirection(toolKey: string, idea: string, choices: BuilderChoices): string {
   const parts: string[] = [];
   if (idea.trim()) parts.push(`${idea.trim().replace(/\.$/, "")}.`);
+  const artistic = !!choices.style && ART_STYLES.has(choices.style);
   for (const g of groupsForTool(toolKey)) {
     const opt = g.options.find((o) => o.key === choices[g.key]);
-    if (opt) parts.push(`${g.label}: ${opt.text}.`);
+    if (!opt) continue;
+    // Art styles override the tool's default "photorealistic" framing.
+    parts.push(g.key === "style" && artistic ? `Style: not a photograph; render it as ${opt.text}, keeping the same person recognizable.` : `${g.label}: ${opt.text}.`);
   }
   if (!parts.length) return "";
   // Text tools render quoted text; everything else must not add text.
   const textTool = ["thumbnails", "social_content", "memes", "testimonial_layouts", "batch_campaigns"].includes(toolKey);
-  parts.push(textTool ? "Text must be spelled exactly as written in quotes, large and easy to read." : QUALITY_TAIL);
+  parts.push(textTool ? "Text must be spelled exactly as written in quotes, large and easy to read." : artistic ? ART_TAIL : QUALITY_TAIL);
   return parts.join(" ");
 }
 

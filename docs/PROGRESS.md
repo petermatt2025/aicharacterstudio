@@ -50,3 +50,6 @@ _Last updated: 2026-11-11_
 - Prompt Builder (ideas + style/mood/lighting/framing/outfit/background chips + Surprise me) on every tool.
 - Admin accounts use top-plan limits. Tests: 100 unit/integration + browser e2e passing.
 - Not verified live yet: Image-to-Prompt and outpaint against real providers (the sandbox proxy can't send Gemini's header).
+- Style boards (moodboards): /styles page, up to 12 images per board, Gemini "Describe this style", applied in any tool as
+  one style-sheet reference + style notes; Image Editor "Apply style board" and Gallery "Restyle". Workspace-private.
+- 20 art styles (anime, pop art, comic, pixel art, cyberpunk…) in the prompt builder; art styles override photoreal framing.

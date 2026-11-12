@@ -34,3 +34,13 @@ describe("prompt builder", () => {
     expect(buildDirection("headshots", r.idea, r.choices).length).toBeGreaterThan(50);
   });
 });
+
+describe("art styles", () => {
+  it("anime/pop art replace the photoreal default and drop 'realistic proportions'", () => {
+    const p = buildDirection("environment_switch", "at a festival", { style: "anime" });
+    expect(p).toContain("Style: not a photograph; render it as high-quality anime illustration");
+    expect(p).not.toContain("realistic proportions");
+    const photo = buildDirection("environment_switch", "at a festival", { style: "cinematic" });
+    expect(photo).toContain("realistic proportions");
+  });
+});

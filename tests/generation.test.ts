@@ -562,3 +562,49 @@ describe("image to prompt", () => {
     }
   });
 });
+
+describe("style boards", () => {
+  it("create a board, apply it to a generation as one style-sheet reference, and restyle an existing image", async () => {
+    const { createBoard, getBoard, updateBoard, deleteBoard, describeBoard } = await import("@/server/style-boards");
+    const u = await makeUser({ plan: "pro", credits: 200 });
+    const c = await upload(u);
+    const s1 = await upload(u, "style");
+    const s2 = await upload(u, "style");
+    const board = await createBoard(u, { name: "Golden film", assetIds: [s1.id, s2.id] });
+    expect(board.asset_ids).toEqual([s1.id, s2.id]);
+    expect((await describeBoard(u, board.id)).description).toMatch(/cinematic/);
+    expect((await getBoard(u, board.id)).description).toMatch(/cinematic/);
+
+    const seen: Array<{ roles: string[]; labels: Array<string | undefined>; prompt: string }> = [];
+    const fake = new FakeImageProvider();
+    setImageProviderForTests({ name: "fake", model: "fake-style", capabilities: () => fake.capabilities(), generate: (r) => { seen.push({ roles: r.referenceImages.map((x) => x.role), labels: r.referenceImages.map((x) => x.label), prompt: r.prompt }); return fake.generate(r); } });
+    const plain = await createQuote(u, { featureKey: "environment_switch", references: [{ assetId: c.id, role: "character" }], presetKeys: ["cafe"] });
+    const { quote, job } = await run(u, { featureKey: "environment_switch", references: [{ assetId: c.id, role: "character" }], presetKeys: ["cafe"], styleBoardId: board.id });
+    expect(job.status).toBe("succeeded");
+    expect(quote.credits).toBeGreaterThan(plain.credits); // style sheet counts as an extra reference
+    expect(seen[0]!.roles).toEqual(["character", "style"]);
+    expect(seen[0]!.labels[1]).toMatch(/STYLE SHEET/);
+    expect(seen[0]!.prompt).toMatch(/Image 2: STYLE SHEET/);
+    expect(seen[0]!.prompt).toMatch(/Style notes: Warm cinematic/);
+
+    // Restyle an existing output with the Image Editor; apply_style needs a board.
+    const out = job.outputs[0]!.assetId;
+    await expect(createQuote(u, { featureKey: "image_edit", references: [{ assetId: out, role: "other" }], presetKeys: ["apply_style"] })).rejects.toMatchObject({ code: "validation_failed" });
+    const restyled = await run(u, { featureKey: "image_edit", references: [{ assetId: out, role: "other" }], presetKeys: ["apply_style"], styleBoardId: board.id });
+    expect(restyled.job.status).toBe("succeeded");
+
+    // Boards are private to their workspace.
+    const other = await makeUser({ plan: "pro", credits: 50 });
+    await expect(getBoard(other, board.id)).rejects.toMatchObject({ code: "not_found" });
+    const oc = await upload(other);
+    await expect(createQuote(other, { featureKey: "environment_switch", references: [{ assetId: oc.id, role: "character" }], presetKeys: ["cafe"], styleBoardId: board.id })).rejects.toMatchObject({ code: "not_found" });
+    await expect(updateBoard(other, board.id, { name: "x" })).rejects.toMatchObject({ code: "not_found" });
+    await expect(createBoard(other, { name: "steal", assetIds: [s1.id] })).rejects.toMatchObject({ code: "not_found" });
+
+    // Empty boards can't be applied; deleting removes it.
+    const empty = await createBoard(u, { name: "Empty" });
+    await expect(createQuote(u, { featureKey: "environment_switch", references: [{ assetId: c.id, role: "character" }], presetKeys: ["cafe"], styleBoardId: empty.id })).rejects.toMatchObject({ code: "validation_failed" });
+    await deleteBoard(u, empty.id);
+    await expect(getBoard(u, empty.id)).rejects.toMatchObject({ code: "not_found" });
+  });
+});

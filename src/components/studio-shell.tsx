@@ -17,7 +17,7 @@ const TERMINAL = new Set(["succeeded", "partial", "failed", "canceled", "rejecte
 
 type EngineOption = { key: "openai" | "gemini"; label: string; hint: string };
 
-export function StudioShell({ tool, access, characters, initialAssets, emailVerified, engines = [], initialSlots = {}, initialPresets, initialPrompt }: { tool: ToolDef; access: Access; characters: Character[]; initialAssets: AssetLite[]; emailVerified: boolean; engines?: EngineOption[]; initialSlots?: Record<string, string>; initialPresets?: string[]; initialPrompt?: string }) {
+export function StudioShell({ tool, access, characters, initialAssets, emailVerified, engines = [], initialSlots = {}, initialPresets, initialPrompt, styleBoards = [], initialStyleBoard }: { tool: ToolDef; access: Access; characters: Character[]; initialAssets: AssetLite[]; emailVerified: boolean; engines?: EngineOption[]; initialSlots?: Record<string, string>; initialPresets?: string[]; initialPrompt?: string; styleBoards?: Array<{ id: string; name: string; count: number; thumbs: string[] }>; initialStyleBoard?: string }) {
   const router = useRouter();
   const [assets, setAssets] = useState(initialAssets);
   const [characterId, setCharacterId] = useState<string | null>(characters[0]?.id ?? null);
@@ -30,6 +30,7 @@ export function StudioShell({ tool, access, characters, initialAssets, emailVeri
   const [aspectRatio, setAspect] = useState(tool.defaultAspect);
   const [quality, setQuality] = useState<"standard" | "high">("standard");
   const [variations, setVariations] = useState(1);
+  const [styleBoardId, setStyleBoardId] = useState<string>(initialStyleBoard && styleBoards.some((b) => b.id === initialStyleBoard) ? initialStyleBoard : "");
   const [engine, setEngine] = useState<EngineOption["key"] | undefined>(engines[0]?.key);
   const [identity, setIdentity] = useState<"loose" | "balanced" | "strict">(characters[0]?.identity_strength ?? "balanced");
   const [quoteState, setQuoteState] = useState<{ q: Quote; fp: string } | null>(null);
@@ -42,7 +43,7 @@ export function StudioShell({ tool, access, characters, initialAssets, emailVeri
   const useSaved = !!characterSlot && characterId !== null;
 
   // Any input change invalidates the quote (quotes are immutable on the server).
-  const fingerprint = JSON.stringify([characterId, slots, presets, prompt, aspectRatio, quality, variations, identity, engine]);
+  const fingerprint = JSON.stringify([characterId, slots, presets, prompt, aspectRatio, quality, variations, identity, engine, styleBoardId]);
   const quote = quoteState && quoteState.fp === fingerprint ? quoteState.q : null;
   const setQuote = (q: Quote | null) => setQuoteState(q ? { q, fp: fingerprint } : null);
 
@@ -71,7 +72,7 @@ export function StudioShell({ tool, access, characters, initialAssets, emailVeri
   );
 
   function requestBody() {
-    return { featureKey: tool.key, characterId: useSaved ? characterId : undefined, references, prompt, presetKeys: presets, aspectRatio, quality, variations, identityStrength: identity, engine };
+    return { featureKey: tool.key, characterId: useSaved ? characterId : undefined, references, prompt, presetKeys: presets, aspectRatio, quality, variations, identityStrength: identity, engine, styleBoardId: styleBoardId || undefined };
   }
 
   async function getQuote() {
@@ -252,6 +253,23 @@ export function StudioShell({ tool, access, characters, initialAssets, emailVeri
                 <option value="standard">Standard</option>
                 <option value="high">High (more credits)</option>
               </select>
+            </Field>
+            <Field label="Style board" htmlFor="styleboard" hint={styleBoards.length ? "Applies a saved look (like a moodboard) to every image." : undefined}>
+              {styleBoards.length ? (
+                <div className="flex items-center gap-2">
+                  <select id="styleboard" className={inputCls} value={styleBoardId} disabled={inputsDisabled} onChange={(e) => setStyleBoardId(e.target.value)}>
+                    <option value="">None</option>
+                    {styleBoards.map((b) => <option key={b.id} value={b.id} disabled={!b.count}>{b.name} ({b.count})</option>)}
+                  </select>
+                  {styleBoardId && (
+                    <span className="flex shrink-0 gap-0.5">
+                      {styleBoards.find((b) => b.id === styleBoardId)?.thumbs.map((t) => <img key={t} src={fileUrl(t, { thumb: true })} alt="" className="h-9 w-9 rounded object-cover" />)}
+                    </span>
+                  )}
+                </div>
+              ) : (
+                <p className="text-sm text-muted"><Link href="/styles" className="text-accent hover:underline">Create a style board</Link> to reuse a look across images.</p>
+              )}
             </Field>
             {engines.length > 1 && (
               <Field label="Engine" htmlFor="engine" hint={engines.find((x) => x.key === engine)?.hint}>

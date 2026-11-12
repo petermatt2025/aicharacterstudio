@@ -27,6 +27,8 @@ export type Preset = {
   outpaint?: boolean;
   /** The user must describe the change in the prompt box. */
   needsPrompt?: boolean;
+  /** A style board must be chosen. */
+  needsStyle?: boolean;
 };
 
 export type ToolDef = {
@@ -289,11 +291,22 @@ export const PHASE2_TOOLS: Record<string, ToolDef> = {
       { key: "clay", label: "Claymation", prompt: "as a claymation figure, handmade clay texture" },
       { key: "pop_art", label: "Pop art", prompt: "as bold pop art with flat bright colors" },
       { key: "vector", label: "Flat vector", prompt: "as a clean flat vector avatar illustration, simple shapes" },
+      { key: "chibi", label: "Chibi", prompt: "as a cute chibi character, big head, small body, kawaii style" },
+      { key: "pixel", label: "Pixel art", prompt: "as retro 16-bit pixel art with a limited palette" },
+      { key: "cyberpunk", label: "Cyberpunk", prompt: "as a cyberpunk character with neon magenta and cyan lighting in a futuristic city" },
+      { key: "fantasy", label: "Fantasy hero", prompt: "as an epic fantasy hero in a detailed digital painting" },
+      { key: "ukiyoe", label: "Japanese woodblock", prompt: "as a traditional Japanese woodblock print with flat colors and fine outlines" },
+      { key: "stained_glass", label: "Stained glass", prompt: "as a stained glass artwork with bold lead lines and glowing colors" },
+      { key: "lowpoly", label: "Low poly", prompt: "as a low-poly 3D character with faceted geometric shapes" },
+      { key: "sticker", label: "Sticker", prompt: "as a die-cut sticker with a thick white border and glossy colors" },
+      { key: "noir", label: "Film noir", prompt: "as a black and white film noir portrait with hard shadows" },
+      { key: "lego_like", label: "Toy figure", prompt: "as a glossy plastic collectible toy figure in a display box" },
+      { key: "synthwave", label: "Synthwave", prompt: "as an 80s synthwave poster with a neon grid and sunset gradient" },
     ],
     presetMode: "shots",
     minPresets: 1,
     maxPresets: 6,
-    defaultPresets: ["pixar", "anime", "watercolor"],
+    defaultPresets: ["pixar", "anime", "pop_art"],
     defaultAspect: "1:1",
     allowVariations: true,
     promptPlaceholder: "Optional: background or mood, e.g. 'pastel background, cheerful'",
@@ -917,6 +930,7 @@ export const EDITOR_TOOLS: Record<string, ToolDef> = {
       { key: "expand_wide", label: "Expand to wide 16:9", prompt: "outpaint", aspect: "16:9", outpaint: true },
       { key: "expand_tall", label: "Expand to tall 9:16", prompt: "outpaint", aspect: "9:16", outpaint: true },
       { key: "expand_square", label: "Expand to square 1:1", prompt: "outpaint", aspect: "1:1", outpaint: true },
+      { key: "apply_style", label: "Apply style board", prompt: "restyle the source image to match the style board's look; keep the same subject, people, pose and composition", needsStyle: true },
       { key: "variation", label: "Similar variation", prompt: "create a fresh variation of this image with the same subject, style and mood but a slightly different pose and composition" },
     ],
     presetMode: "shots",
