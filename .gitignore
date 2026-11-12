@@ -8,3 +8,4 @@ node_modules/
 next-env.d.ts
 test-results/
 coverage/
+public/showcase/.hero.png

@@ -113,7 +113,11 @@ export function mapOpenAIError(e: unknown): ProviderError {
   if (e instanceof APIError) {
     const code = (e.code ?? (e.error as { code?: string } | undefined)?.code ?? "") as string;
     if (code === "moderation_blocked" || /safety system|content policy/i.test(e.message)) return new ProviderError("moderation", "The request was blocked by the provider's safety system");
-    if (e.status === 429) return new ProviderError(/quota|billing/i.test(e.message) ? "auth" : "rate_limit", "Image provider is rate limiting requests");
+    const type = ((e.error as { type?: string } | undefined)?.type ?? (e as { type?: string }).type ?? "") as string;
+    if (e.status === 429 && (/insufficient_quota|credit_balance_exhausted|billing_hard_limit/.test(`${code} ${type}`) || /quota|billing|no credits remaining/i.test(e.message))) {
+      return new ProviderError("auth", "Image provider account is out of credit");
+    }
+    if (e.status === 429) return new ProviderError("rate_limit", "Image provider is rate limiting requests");
     if (e.status === 401 || e.status === 403) return new ProviderError("auth", "Image provider rejected our credentials");
     if (e.status && e.status >= 500) return new ProviderError("transient", `Image provider error (${e.status})`);
     if (e.status === 400) return new ProviderError("invalid_request", `Provider rejected the request: ${e.message.slice(0, 200)}`);

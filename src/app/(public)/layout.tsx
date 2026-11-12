@@ -1,3 +1,5 @@
+import "@fontsource-variable/fraunces/index.css";
+import "@fontsource-variable/fraunces/full-italic.css";
 import { SiteFooter, SiteHeader } from "@/components/site-header";
 import { currentUser } from "@/server/http";
 

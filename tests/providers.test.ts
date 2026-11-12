@@ -168,3 +168,16 @@ describe("image to prompt", () => {
     expect(TOOLS.image_to_prompt).toBeUndefined();
   });
 });
+
+describe("OpenAI error mapping", () => {
+  it("treats an exhausted credit balance as a non-retryable account problem, not a rate limit", async () => {
+    const { mapOpenAIError } = await import("@/server/providers/openai");
+    const { APIError } = await import("openai");
+    const quota = APIError.generate(429, { error: { message: "You have no credits remaining. Add credits to continue.", type: "insufficient_quota", code: "credit_balance_exhausted" } }, undefined, new Headers());
+    const mapped = mapOpenAIError(quota);
+    expect(mapped.kind).toBe("auth");
+    expect(mapped.retryable).toBe(false);
+    const rl = APIError.generate(429, { error: { message: "Rate limit reached for images per minute", type: "requests", code: "rate_limit_exceeded" } }, undefined, new Headers());
+    expect(mapOpenAIError(rl).kind).toBe("rate_limit");
+  });
+});
