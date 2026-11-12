@@ -3,7 +3,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ASPECT_RATIOS, IDENTITY_LOCK, type ToolDef } from "@/lib/tools";
-import { directScene, specToPrompt } from "@/lib/scene-director";
+import { buildDirection, groupsForTool, surprise, TOOL_IDEAS, type BuilderChoices, type BuilderGroupKey } from "@/lib/prompt-builder";
 import { api, ApiError, fileUrl } from "@/lib/api";
 import { AssetPicker, type AssetLite } from "./uploader";
 import { Badge, Button, ButtonLink, Card, Field, Notice, cx, inputCls } from "./ui";
@@ -24,6 +24,9 @@ export function StudioShell({ tool, access, characters, initialAssets, emailVeri
   const [slots, setSlots] = useState<Record<string, string | null>>({});
   const [presets, setPresets] = useState<string[]>(tool.defaultPresets);
   const [prompt, setPrompt] = useState("");
+  const [idea, setIdea] = useState("");
+  const [choices, setChoices] = useState<BuilderChoices>({});
+  const [lastAuto, setLastAuto] = useState("");
   const [aspectRatio, setAspect] = useState(tool.defaultAspect);
   const [quality, setQuality] = useState<"standard" | "high">("standard");
   const [variations, setVariations] = useState(1);
@@ -119,10 +122,21 @@ export function StudioShell({ tool, access, characters, initialAssets, emailVeri
     });
   }
 
-  function direct() {
-    const spec = directScene(prompt || presets.map((k) => tool.presets.find((p) => p.key === k)?.label).join(", "), aspectRatio);
-    setPrompt(specToPrompt(spec));
+  /** Prompt Builder: write the prompt from the chosen idea + options, unless the user has typed their own. */
+  function applyBuilder(nextIdea: string, nextChoices: BuilderChoices, force = false) {
+    setIdea(nextIdea);
+    setChoices(nextChoices);
+    const text = buildDirection(tool.key, nextIdea, nextChoices);
+    if (force || !prompt.trim() || prompt === lastAuto) {
+      setPrompt(text);
+      setLastAuto(text);
+    }
   }
+  function toggleChoice(g: BuilderGroupKey, key: string) {
+    applyBuilder(idea, { ...choices, [g]: choices[g] === key ? undefined : key });
+  }
+  const builderText = buildDirection(tool.key, idea, choices);
+  const promptEdited = !!prompt.trim() && prompt !== lastAuto && !!builderText && prompt !== builderText;
 
   const locked = !access.ok;
   const inputsDisabled = locked || !emailVerified || (job !== null && !TERMINAL.has(job.status));
@@ -184,13 +198,48 @@ export function StudioShell({ tool, access, characters, initialAssets, emailVeri
 
         <Card>
           <h2 className="font-semibold">3. Direction</h2>
-          <Field label="Prompt" htmlFor="prompt" hint="Edit freely. The Scene Director turns a short brief into a structured prompt you can adjust.">
-            <textarea id="prompt" rows={tool.key === "reference_mixer" ? 5 : 4} maxLength={2000} disabled={inputsDisabled} value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder={tool.promptPlaceholder} className={inputCls} />
-          </Field>
-          <div className="mt-2 flex flex-wrap items-center gap-3">
-            <Button type="button" variant="secondary" onClick={direct} disabled={inputsDisabled}>Enhance with Scene Director</Button>
-            <span className="text-xs text-muted">{prompt.length}/2000</span>
+          <p className="mt-1 text-xs text-muted">Pick an idea and a few options, and the prompt is written for you. You can still edit it.</p>
+
+          {(TOOL_IDEAS[tool.key]?.length ?? 0) > 0 && (
+            <div className="mt-4">
+              <p className="text-sm font-medium">Ideas</p>
+              <div className="mt-2 flex flex-wrap gap-2" role="group" aria-label="Ideas">
+                {TOOL_IDEAS[tool.key]!.map((x) => (
+                  <button key={x.label} type="button" disabled={inputsDisabled} aria-pressed={idea === x.text} title={x.text} onClick={() => applyBuilder(idea === x.text ? "" : x.text, choices)}
+                    className={cx("rounded-full border px-3 py-1 text-sm", idea === x.text ? "border-accent bg-accent/15 text-accent" : "border-line text-muted hover:text-ink")}>
+                    {x.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="mt-4 space-y-3">
+            {groupsForTool(tool.key).map((g) => (
+              <div key={g.key} className="sm:flex sm:items-start sm:gap-3">
+                <p className="w-24 shrink-0 pt-1 text-sm font-medium">{g.label}</p>
+                <div className="mt-1 flex flex-wrap gap-1.5 sm:mt-0" role="group" aria-label={g.label}>
+                  {g.options.map((o) => (
+                    <button key={o.key} type="button" disabled={inputsDisabled} aria-pressed={choices[g.key] === o.key} onClick={() => toggleChoice(g.key, o.key)}
+                      className={cx("rounded-full border px-2.5 py-0.5 text-xs", choices[g.key] === o.key ? "border-accent bg-accent/15 text-accent" : "border-line text-muted hover:text-ink")}>
+                      {o.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
           </div>
+
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            <Button type="button" variant="secondary" disabled={inputsDisabled} onClick={() => { const r = surprise(tool.key); applyBuilder(r.idea, r.choices, true); }}>🎲 Surprise me</Button>
+            {promptEdited && <Button type="button" variant="ghost" disabled={inputsDisabled} onClick={() => applyBuilder(idea, choices, true)}>Rewrite prompt from my choices</Button>}
+            {(idea || Object.values(choices).some(Boolean)) && <Button type="button" variant="ghost" disabled={inputsDisabled} onClick={() => applyBuilder("", {}, true)}>Clear</Button>}
+          </div>
+
+          <Field label="Prompt" htmlFor="prompt" hint="Written from your choices above. Edit freely.">
+            <textarea id="prompt" rows={tool.key === "reference_mixer" ? 6 : 5} maxLength={2000} disabled={inputsDisabled} value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder={tool.promptPlaceholder} className={inputCls} />
+          </Field>
+          <div className="mt-1 text-right text-xs text-muted">{prompt.length}/2000</div>
 
           <div className="mt-6 grid gap-4 sm:grid-cols-2">
             <Field label="Aspect ratio" htmlFor="ar">
