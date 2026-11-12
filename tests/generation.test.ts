@@ -633,3 +633,44 @@ describe("text studio", () => {
     await expect(saveTextOverlay(other, src.id, same, { texts: ["hi"] })).rejects.toMatchObject({ code: "not_found" });
   });
 });
+
+describe("campaigns", () => {
+  it("create, auto-file generations, add/remove gallery images, zip, and keep campaigns private", async () => {
+    const m = await import("@/server/campaigns");
+    const u = await makeUser({ plan: "pro", credits: 100 });
+    const c = await upload(u);
+    const camp = await m.createCampaign(u, { name: "Summer launch", brief: "bright, beachy, gen Z" });
+    expect(camp.asset_ids).toEqual([]);
+
+    // Generating "into" the campaign files the outputs automatically.
+    const { job } = await run(u, { featureKey: "environment_switch", references: [{ assetId: c.id, role: "character" }], presetKeys: ["cafe", "beach"], campaignId: camp.id });
+    expect(job.outputs).toHaveLength(2);
+    let now = await m.getCampaign(u, camp.id);
+    expect(new Set(now.asset_ids)).toEqual(new Set(job.outputs.map((o) => o.assetId)));
+
+    // Manual add (idempotent) and remove.
+    const other = await run(u, { featureKey: "environment_switch", references: [{ assetId: c.id, role: "character" }], presetKeys: ["gym"] });
+    const extra = other.job.outputs[0]!.assetId;
+    now = await m.addToCampaign(u, camp.id, [extra, extra]);
+    expect(now.asset_ids).toHaveLength(3);
+    now = await m.removeFromCampaign(u, camp.id, [extra]);
+    expect(now.asset_ids).toHaveLength(2);
+
+    const zip = await m.campaignZip(u, camp.id);
+    expect(zip.filename).toBe("Summer_launch.zip");
+    expect(zip.buf.byteLength).toBeGreaterThan(100);
+
+    // Privacy: other users can't see, fill, or generate into it, nor add their images to it.
+    const stranger = await makeUser({ plan: "pro", credits: 50 });
+    const sc = await upload(stranger);
+    await expect(m.getCampaign(stranger, camp.id)).rejects.toMatchObject({ code: "not_found" });
+    await expect(m.addToCampaign(stranger, camp.id, [sc.id])).rejects.toMatchObject({ code: "not_found" });
+    await expect(m.addToCampaign(u, camp.id, [sc.id])).rejects.toMatchObject({ code: "not_found" });
+    await expect(createQuote(stranger, { featureKey: "environment_switch", references: [{ assetId: sc.id, role: "character" }], presetKeys: ["cafe"], campaignId: camp.id })).rejects.toMatchObject({ code: "not_found" });
+
+    // Deleting the campaign keeps the images.
+    await m.deleteCampaign(u, camp.id);
+    await expect(m.getCampaign(u, camp.id)).rejects.toMatchObject({ code: "not_found" });
+    expect((await (await import("@/server/assets")).getAsset(u, extra)).id).toBe(extra);
+  });
+});

@@ -17,7 +17,7 @@ const TERMINAL = new Set(["succeeded", "partial", "failed", "canceled", "rejecte
 
 type EngineOption = { key: "openai" | "gemini"; label: string; hint: string };
 
-export function StudioShell({ tool, access, characters, initialAssets, emailVerified, engines = [], initialSlots = {}, initialPresets, initialPrompt, styleBoards = [], initialStyleBoard }: { tool: ToolDef; access: Access; characters: Character[]; initialAssets: AssetLite[]; emailVerified: boolean; engines?: EngineOption[]; initialSlots?: Record<string, string>; initialPresets?: string[]; initialPrompt?: string; styleBoards?: Array<{ id: string; name: string; count: number; thumbs: string[] }>; initialStyleBoard?: string }) {
+export function StudioShell({ tool, access, characters, initialAssets, emailVerified, engines = [], initialSlots = {}, initialPresets, initialPrompt, styleBoards = [], initialStyleBoard, campaigns = [], initialCampaign }: { tool: ToolDef; access: Access; characters: Character[]; initialAssets: AssetLite[]; emailVerified: boolean; engines?: EngineOption[]; initialSlots?: Record<string, string>; initialPresets?: string[]; initialPrompt?: string; styleBoards?: Array<{ id: string; name: string; count: number; thumbs: string[] }>; initialStyleBoard?: string; campaigns?: Array<{ id: string; name: string }>; initialCampaign?: string }) {
   const router = useRouter();
   const [assets, setAssets] = useState(initialAssets);
   const [characterId, setCharacterId] = useState<string | null>(characters[0]?.id ?? null);
@@ -31,6 +31,7 @@ export function StudioShell({ tool, access, characters, initialAssets, emailVeri
   const [quality, setQuality] = useState<"standard" | "high">("standard");
   const [variations, setVariations] = useState(1);
   const [styleBoardId, setStyleBoardId] = useState<string>(initialStyleBoard && styleBoards.some((b) => b.id === initialStyleBoard) ? initialStyleBoard : "");
+  const [campaignId, setCampaignId] = useState<string>(initialCampaign && campaigns.some((c) => c.id === initialCampaign) ? initialCampaign : "");
   const [engine, setEngine] = useState<EngineOption["key"] | undefined>(engines[0]?.key);
   const [identity, setIdentity] = useState<"loose" | "balanced" | "strict">(characters[0]?.identity_strength ?? "balanced");
   const [quoteState, setQuoteState] = useState<{ q: Quote; fp: string } | null>(null);
@@ -43,7 +44,7 @@ export function StudioShell({ tool, access, characters, initialAssets, emailVeri
   const useSaved = !!characterSlot && characterId !== null;
 
   // Any input change invalidates the quote (quotes are immutable on the server).
-  const fingerprint = JSON.stringify([characterId, slots, presets, prompt, aspectRatio, quality, variations, identity, engine, styleBoardId]);
+  const fingerprint = JSON.stringify([characterId, slots, presets, prompt, aspectRatio, quality, variations, identity, engine, styleBoardId, campaignId]);
   const quote = quoteState && quoteState.fp === fingerprint ? quoteState.q : null;
   const setQuote = (q: Quote | null) => setQuoteState(q ? { q, fp: fingerprint } : null);
 
@@ -72,7 +73,7 @@ export function StudioShell({ tool, access, characters, initialAssets, emailVeri
   );
 
   function requestBody() {
-    return { featureKey: tool.key, characterId: useSaved ? characterId : undefined, references, prompt, presetKeys: presets, aspectRatio, quality, variations, identityStrength: identity, engine, styleBoardId: styleBoardId || undefined };
+    return { featureKey: tool.key, characterId: useSaved ? characterId : undefined, references, prompt, presetKeys: presets, aspectRatio, quality, variations, identityStrength: identity, engine, styleBoardId: styleBoardId || undefined, campaignId: campaignId || undefined };
   }
 
   async function getQuote() {
@@ -269,6 +270,16 @@ export function StudioShell({ tool, access, characters, initialAssets, emailVeri
                 </div>
               ) : (
                 <p className="text-sm text-muted"><Link href="/styles" className="text-accent hover:underline">Create a style board</Link> to reuse a look across images.</p>
+              )}
+            </Field>
+            <Field label="Save to campaign" htmlFor="campaign" hint={campaigns.length ? "New images are also filed in this campaign folder." : undefined}>
+              {campaigns.length ? (
+                <select id="campaign" className={inputCls} value={campaignId} disabled={inputsDisabled} onChange={(e) => setCampaignId(e.target.value)}>
+                  <option value="">Gallery only</option>
+                  {campaigns.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              ) : (
+                <p className="text-sm text-muted"><Link href="/campaigns" className="text-accent hover:underline">Create a campaign</Link> to keep projects together.</p>
               )}
             </Field>
             {engines.length > 1 && (

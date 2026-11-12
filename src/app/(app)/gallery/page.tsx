@@ -23,6 +23,9 @@ export default function Gallery() {
   const [view, setView] = useState<"grid" | "list">("grid");
   const [selected, setSelected] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [campaigns, setCampaigns] = useState<Array<{ id: string; name: string }>>([]);
+  useEffect(() => { api<{ campaigns: Array<{ id: string; name: string }> }>("/api/campaigns").then((r) => setCampaigns(r.campaigns)).catch(() => {}); }, []);
 
   const load = useCallback(async () => {
     const p = new URLSearchParams({ kind: "output", limit: "100" });
@@ -37,6 +40,17 @@ export default function Gallery() {
   async function toggleFav(a: AssetLite) {
     await api(`/api/assets/${a.id}`, { method: "PATCH", body: { favorite: !a.favorite } });
     load();
+  }
+  async function addToCampaign(id: string) {
+    if (!id || !selected.length) return;
+    setError(null);
+    try {
+      await api(`/api/campaigns/${id}/items`, { body: { assetIds: selected } });
+      setNotice(`Added ${selected.length} image(s) to "${campaigns.find((c) => c.id === id)?.name}".`);
+      setSelected([]);
+    } catch (e) {
+      setError((e as Error).message);
+    }
   }
   async function bulkDelete() {
     if (!selected.length || !confirm(`Delete ${selected.length} image(s) permanently?`)) return;
@@ -59,10 +73,17 @@ export default function Gallery() {
         <label className="flex items-center gap-2 pb-2 text-sm"><input type="checkbox" checked={fav} onChange={(e) => setFav(e.target.checked)} />Favorites</label>
         <div className="ml-auto flex gap-2">
           <Button variant="secondary" onClick={() => setView(view === "grid" ? "list" : "grid")}>{view === "grid" ? "List view" : "Grid view"}</Button>
+          {campaigns.length > 0 && (
+            <select aria-label="Add selected to campaign" className={inputCls + " w-auto"} disabled={!selected.length} value="" onChange={(e) => void addToCampaign(e.target.value)}>
+              <option value="">Add selected to campaign…</option>
+              {campaigns.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          )}
           <Button variant="danger" disabled={!selected.length} onClick={bulkDelete}>Delete selected ({selected.length})</Button>
         </div>
       </div>
       {error && <Notice tone="error">{error}</Notice>}
+      {notice && <Notice tone="ok">{notice}</Notice>}
       {items.length === 0 ? <Card className="text-sm text-muted">No images match.</Card> : (
         <ul className={cx(view === "grid" ? "grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4" : "space-y-2")}>
           {items.map((a) => (

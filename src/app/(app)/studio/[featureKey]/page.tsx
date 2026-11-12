@@ -10,6 +10,7 @@ import { StudioShell } from "@/components/studio-shell";
 import { AppError } from "@/server/errors";
 import { ImageToPrompt } from "@/components/image-to-prompt";
 import { listBoards } from "@/server/style-boards";
+import { listCampaigns } from "@/server/campaigns";
 import { availableEngines, ENGINE_INFO } from "@/server/providers";
 
 export default async function ToolPage({ params, searchParams }: { params: Promise<{ featureKey: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
@@ -52,7 +53,7 @@ export default async function ToolPage({ params, searchParams }: { params: Promi
     );
   }
 
-  const [characters, assets, boards] = await Promise.all([listCharacters(user), listAssets(user, { limit: 100 }), listBoards(user)]);
+  const [characters, assets, boards, campaigns] = await Promise.all([listCharacters(user), listAssets(user, { limit: 100 }), listBoards(user), listCampaigns(user)]);
   return (
     <div className="mx-auto max-w-7xl">
       <PageHeader
@@ -78,6 +79,8 @@ export default async function ToolPage({ params, searchParams }: { params: Promi
         characters={characters.map((c) => ({ id: c.id, name: c.name, primary_asset_id: c.primary_asset_id, identity_strength: c.identity_strength }))}
         initialAssets={assets.filter((a) => a.kind !== "output" || tool.slots.some((sl) => sl.pickOutputs)).map((a) => JSON.parse(JSON.stringify(assetView(a))))}
         styleBoards={boards.map((b) => ({ id: b.id, name: b.name, count: b.asset_ids.length, thumbs: b.asset_ids.slice(0, 3) }))}
+        campaigns={campaigns.map((c) => ({ id: c.id, name: c.name }))}
+        initialCampaign={typeof sp.campaign === "string" ? sp.campaign : undefined}
         initialStyleBoard={typeof sp.style === "string" ? sp.style : undefined}
         initialPrompt={typeof sp.prompt === "string" ? sp.prompt.slice(0, 2000) : undefined}
         initialPresets={typeof sp.preset === "string" && tool.presets.some((pr) => pr.key === sp.preset) ? [sp.preset] : undefined}

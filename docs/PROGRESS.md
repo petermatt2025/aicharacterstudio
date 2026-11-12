@@ -57,3 +57,4 @@ _Last updated: 2026-11-11_
   position/rotation/spacing, 8 one-click looks; saved as a NEW image after text + image moderation (free, no AI).
 - Landing page redesigned ("sunset vivid"); showcase images are real gpt-image-2 outputs of fictional people.
 - OpenAI account ran out of credit on 2026-11-12: the OpenAI engine fails until topped up (now detected as non-retryable).
+- Campaigns: folders with a brief, auto-filing of generations ("Save to campaign"), add/remove from Gallery, ZIP download.

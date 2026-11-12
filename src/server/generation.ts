@@ -12,6 +12,7 @@ import { rateLimit } from "./rate-limit";
 import { getSetting } from "./seed";
 import { availableEngines, ENGINES, imageProvider, type Engine } from "./providers";
 import { getBoard } from "./style-boards";
+import { getCampaign } from "./campaigns";
 import { APP_MAX_REFERENCES } from "./providers/capabilities";
 import { buildShots, type Shot } from "./prompting";
 import type { AspectRatio, Quality, ReferenceRole } from "./providers/types";
@@ -31,6 +32,7 @@ export const quoteRequestSchema = z.object({
   identityStrength: z.enum(["loose", "balanced", "strict"]).optional(),
   engine: z.enum(ENGINES).optional(),
   styleBoardId: z.string().uuid().optional(),
+  campaignId: z.string().uuid().optional(),
 });
 export type QuoteRequest = z.infer<typeof quoteRequestSchema>;
 
@@ -53,6 +55,8 @@ export type JobSnapshot = {
   engine?: Engine;
   /** Style board applied to every image (sent as one style-sheet reference). */
   style?: { boardId: string; name: string; assetIds: string[]; description: string };
+  /** New images are filed into this campaign folder. */
+  campaignId?: string;
 };
 
 type Rules = Record<string, { credits: number; per_outputs: number }>;
@@ -232,6 +236,7 @@ export async function createQuote(user: SessionUser, input: z.input<typeof quote
     collageOverflow,
     engine,
     ...(style ? { style } : {}),
+    ...(req.campaignId ? { campaignId: (await getCampaign(user, req.campaignId)).id } : {}),
   };
   const ttl = await getSetting<number>("quote_ttl_seconds");
   const breakdown = { ...calc, outputs, warnings, provider: provider.name, chargePolicy: "You are charged only for images delivered. Unused credits are returned automatically." };

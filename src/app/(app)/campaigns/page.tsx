@@ -1,15 +1,17 @@
-import { Badge, Card, PageHeader } from "@/components/ui";
+import { currentUser } from "@/server/http";
+import { listCampaigns } from "@/server/campaigns";
+import { PageHeader } from "@/components/ui";
+import { CampaignList } from "@/components/campaigns";
 
 export const metadata = { title: "Campaigns" };
 
-export default function Campaigns() {
+export default async function Campaigns() {
+  const user = (await currentUser())!;
+  const list = await listCampaigns(user);
   return (
-    <div className="mx-auto max-w-3xl">
-      <PageHeader title="Campaigns" sub="Group assets, shot lists and batches." />
-      <Card className="space-y-2">
-        <Badge tone="planned" />
-        <p className="text-sm text-muted">Campaign folders and batch generation arrive with the Marketing (phase 3) and Agency (phase 4) releases. Until then, use the gallery filters to group your images.</p>
-      </Card>
+    <div className="mx-auto max-w-7xl">
+      <PageHeader title="Campaigns" sub="Folders for your projects: keep a brief, collect images, generate straight into them and download everything as a ZIP." />
+      <CampaignList initial={list.map((c) => ({ id: c.id, name: c.name, brief: c.brief, count: c.item_count, covers: c.cover_ids }))} />
     </div>
   );
 }

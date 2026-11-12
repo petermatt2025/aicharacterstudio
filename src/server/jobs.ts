@@ -6,6 +6,7 @@ import { settleReservation } from "./credits";
 import { imageProvider } from "./providers";
 import { TOOLS } from "@/lib/tools";
 import { boardImagesForJob, styleSheet } from "./style-boards";
+import { fileOutputInCampaign } from "./campaigns";
 import { STYLE_SHEET_LABEL } from "./prompting";
 import { ProviderError, type AspectRatio, type ImageProvider, type ReferenceRole } from "./providers/types";
 import { applyWatermark, makeThumbnail, resizeLongEdge, sanitizeImage, EXT } from "./images";
@@ -282,6 +283,8 @@ async function storeOutput(job: JobRow, index: number, raw: Buffer, provider: st
   if (!inserted) {
     await storage().delete(key);
     await storage().delete(thumbKey);
+  } else if (snap.campaignId) {
+    await fileOutputInCampaign(job.workspace_id, snap.campaignId, id);
   }
   return "stored";
 }
