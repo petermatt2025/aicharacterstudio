@@ -17,11 +17,12 @@ export default async function Admin({ searchParams }: { searchParams: Promise<{ 
   const user = await currentUser();
   if (!user?.isAdmin) notFound(); // do not reveal the admin surface
   const days = (await searchParams).days === "7" ? 7 : 30;
-  const [report, jobs, features, rules, settings, users, audit, plans] = await Promise.all([
+  const [report, jobs, features, rules, settings, users, audit, plans, packs] = await Promise.all([
     usageReport(user, days), recentJobs(user), listFeatures(),
     q<{ key: string; label: string; credits: string; per_outputs: number }>(`SELECT key, label, credits, per_outputs FROM credit_rules ORDER BY key`),
     q<{ key: string; value: unknown }>(`SELECT key, value FROM app_settings ORDER BY key`),
     listUsers(user), auditLog(user), listPlans(),
+    q<{ key: string; display_name: string; credits: number; price_cents: number; stripe_price_id: string | null }>(`SELECT key, display_name, credits, price_cents, stripe_price_id FROM topup_packs ORDER BY price_cents`),
   ]);
   const totalCost = report.byFeature.reduce((s, r) => s + Number(r.cost_usd ?? 0), 0);
   const totalCredits = report.byFeature.reduce((s, r) => s + r.credits, 0);
@@ -71,6 +72,8 @@ export default async function Admin({ searchParams }: { searchParams: Promise<{ 
       <Card><h2 className="font-semibold">Plans and Stripe prices</h2>
         <table className="mt-2 w-full text-sm"><thead className="text-left text-muted"><tr><th>Plan</th><th>Credits/mo</th><th>Monthly price ID</th><th>Annual price ID</th></tr></thead>
           <tbody>{plans.map((p) => <tr key={p.key} className="border-t border-line"><td className="py-1">{p.display_name}</td><td>{p.monthly_credits}</td><td className="font-mono text-xs">{p.stripe_price_monthly ?? "—"}</td><td className="font-mono text-xs">{p.stripe_price_annual ?? "—"}</td></tr>)}</tbody></table>
+        <table className="mt-4 w-full text-sm"><thead className="text-left text-muted"><tr><th>Top-up pack</th><th>Credits</th><th>Price</th><th>Stripe price ID</th></tr></thead>
+          <tbody>{packs.map((k) => <tr key={k.key} className="border-t border-line"><td className="py-1">{k.display_name}</td><td>{k.credits}</td><td>{fmtUsd(k.price_cents)}</td><td className="font-mono text-xs">{k.stripe_price_id ?? "—"}</td></tr>)}</tbody></table>
         <StripePricesButton />
       </Card>
       <AdminUsers users={JSON.parse(JSON.stringify(users))} />
