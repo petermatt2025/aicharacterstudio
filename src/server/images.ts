@@ -5,6 +5,8 @@ import { AppError } from "./errors";
 export type ImageMime = "image/png" | "image/jpeg" | "image/webp";
 const FORMAT_TO_MIME: Record<string, ImageMime> = { png: "image/png", jpeg: "image/jpeg", webp: "image/webp" };
 export const EXT: Record<ImageMime, string> = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp" };
+/** File extensions for every stored media type (images + generated videos). */
+export const FILE_EXT: Record<string, string> = { ...EXT, "video/mp4": "mp4" };
 
 const MAX_PIXELS = 40_000_000;
 const MAX_EDGE = 8192;

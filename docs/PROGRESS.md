@@ -63,3 +63,4 @@ _Last updated: 2026-11-11_
   tool/user; email alerts (engine key/credit failures, failure-rate spikes, queue backlog, daily cap, Stripe webhook
   failures) throttled per kind; /admin/status live checks; Admin "Set up Stripe prices"; Admin-managed invites +
   open sign-up switch; Stripe errors explained to admins.
+- Photo Animator (Veo via @google/genai): Pro/Agency, 40 credits, 6-second MP4s stored as assets with poster; Gallery 🎬 Animate; status page lists available Veo models; never part of the free trial.

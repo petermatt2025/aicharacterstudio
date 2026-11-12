@@ -6,6 +6,8 @@ import { settleReservation } from "./credits";
 import { imageProvider } from "./providers";
 import { TOOLS } from "@/lib/tools";
 import { boardImagesForJob, styleSheet } from "./style-boards";
+import { videoProvider, type VideoProvider } from "./providers/video";
+import { getSetting } from "./seed";
 import { fileOutputInCampaign } from "./campaigns";
 import { STYLE_SHEET_LABEL } from "./prompting";
 import { ProviderError, type AspectRatio, type ImageProvider, type ReferenceRole } from "./providers/types";
@@ -136,6 +138,7 @@ export async function processJob(job: JobRow, workerId: string, providerOverride
   if (job.attempts > job.max_attempts) {
     return finalize(job, workerId, { code: "retries_exhausted", message: "The image provider kept failing. Your unused credits were returned." });
   }
+  if (TOOLS[job.feature_key]?.output === "video") return processVideoJob(job, workerId);
 
   // Load references (owned by the job's workspace; deleted references fail the job and refund).
   const inputs = await q<{ asset_id: string; role: ReferenceRole; storage_key: string; mime: string; deleted_at: Date | null }>(
@@ -346,4 +349,86 @@ export async function drainQueue(workerId: string, max = 50, provider?: ImagePro
     results.push(await processJob(j, workerId, provider));
   }
   return results;
+}
+
+/** Photo → video job: one output, long-running engine call with lease renewal while waiting. */
+async function processVideoJob(job: JobRow, workerId: string): Promise<string> {
+  const snap = job.request;
+  const input = await one<{ storage_key: string; deleted_at: Date | null }>(
+    `SELECT a.storage_key, a.deleted_at FROM generation_job_inputs i JOIN assets a ON a.id=i.asset_id AND a.workspace_id=$2 WHERE i.job_id=$1 ORDER BY i.position LIMIT 1`,
+    [job.id, job.workspace_id],
+  );
+  if (!input || input.deleted_at) return finalize(job, workerId, { code: "reference_deleted", message: "The photo was deleted before the video was made; credits returned." });
+  if (await one(`SELECT 1 FROM generation_job_outputs WHERE job_id=$1 AND output_index=0`, [job.id])) return finalize(job, workerId, null);
+
+  let provider: VideoProvider;
+  try {
+    provider = videoProvider();
+  } catch (e) {
+    void raiseAlert("video_not_configured", "Worker can't make videos", `A video job could not run: ${(e as Error).message}. Add GEMINI_API_KEY to the worker service.`);
+    return finalize(job, workerId, { code: "provider_unavailable", message: "Video is temporarily unavailable. Your credits were returned." });
+  }
+  const src = await storage().get(input.storage_key);
+  const image = { bytes: await sharp(src).rotate().jpeg({ quality: 92 }).toBuffer(), mime: "image/jpeg" };
+  const t0 = Date.now();
+  try {
+    const res = await provider.generate({
+      prompt: snap.shots[0]?.prompt ?? "Animate this photo with subtle natural motion.",
+      image,
+      aspectRatio: snap.aspectRatio === "16:9" ? "16:9" : "9:16",
+      seconds: 6,
+      onWait: async () => (await heartbeat(job.id, workerId)).owned,
+    });
+    const cost = res.provider === "fake" ? 0.01 : Number(await getSetting<number>("price_video_usd").catch(() => 1.2));
+    await q(
+      `INSERT INTO usage_events (job_id, workspace_id, feature_key, provider, model, operation, attempt, success, usage, cost_usd, duration_ms) VALUES ($1,$2,$3,$4,$5,'video',$6,true,$7,$8,$9)`,
+      [job.id, job.workspace_id, job.feature_key, res.provider, res.model, job.attempts, JSON.stringify({ seconds: 6 }), cost, Date.now() - t0],
+    );
+    await q(`UPDATE generation_jobs SET provider=$2, model=$3 WHERE id=$1`, [job.id, res.provider, res.model]);
+    const id = crypto.randomUUID();
+    const key = `ws/${job.workspace_id}/outputs/${job.id}/0-${id}.mp4`;
+    const thumbKey = `ws/${job.workspace_id}/thumbs/${id}.webp`;
+    await storage().put(key, res.bytes, "video/mp4");
+    await storage().put(thumbKey, await makeThumbnail(src), "image/webp");
+    const inserted = await tx(async (c) => {
+      if (await one(`SELECT 1 FROM generation_job_outputs WHERE job_id=$1 AND output_index=0 FOR UPDATE`, [job.id], c)) return false;
+      await c.query(
+        `INSERT INTO assets (id, workspace_id, owner_user_id, kind, storage_key, thumb_key, title, mime, bytes, width, height, sha256, provenance, moderation_status, feature_key, watermarked)
+         VALUES ($1,$2,$3,'output',$4,$5,$6,'video/mp4',$7,$8,$9,encode(sha256($10),'hex'),$11,$12,$13,false)`,
+        [id, job.workspace_id, job.user_id, key, thumbKey, "Animated video", res.bytes.length, res.width, res.height, res.bytes,
+          JSON.stringify({ source: "generation", jobId: job.id, provider: res.provider, model: res.model, synthetic: true, video: true }), env().MODERATION_PROVIDER === "openai" ? "passed" : "baseline_only", job.feature_key],
+      );
+      await c.query(`INSERT INTO generation_job_outputs (job_id, output_index, asset_id) VALUES ($1,0,$2)`, [job.id, id]);
+      await c.query(`UPDATE generation_jobs SET outputs_delivered = outputs_delivered + 1 WHERE id=$1`, [job.id]);
+      return true;
+    });
+    if (!inserted) {
+      await storage().delete(key);
+      await storage().delete(thumbKey);
+    } else if (snap.campaignId) {
+      await fileOutputInCampaign(job.workspace_id, snap.campaignId, id);
+    }
+    return finalize(job, workerId, null);
+  } catch (e) {
+    const pe = e instanceof ProviderError ? e : new ProviderError("transient", (e as Error)?.message?.slice(0, 200) ?? "error");
+    await q(
+      `INSERT INTO usage_events (job_id, workspace_id, feature_key, provider, model, operation, attempt, success, error_code, usage, cost_usd, duration_ms) VALUES ($1,$2,$3,$4,$5,'video',$6,false,$7,'{}',NULL,$8)`,
+      [job.id, job.workspace_id, job.feature_key, provider.name, provider.model, job.attempts, pe.kind, Date.now() - t0],
+    );
+    log("warn", "job.video_error", { jobId: job.id, kind: pe.kind, message: pe.message.slice(0, 200) });
+    if (pe.retryable && job.attempts < job.max_attempts) {
+      await q(
+        `UPDATE generation_jobs SET status='queued', locked_by=NULL, lease_expires_at=NULL, run_after=now() + ($3 || ' seconds')::interval, error_code=$4, error_message=$5 WHERE id=$1 AND locked_by=$2`,
+        [job.id, workerId, String(backoffSeconds(job.attempts)), pe.kind, "Retrying after a temporary video engine problem…"],
+      );
+      return "retry_scheduled";
+    }
+    if (pe.kind === "auth" || pe.kind === "invalid_request") {
+      void raiseAlert(`video_engine:${pe.kind}`, "Video engine is failing", `The video engine (${provider.model}) refused a job: ${pe.message}. Check the Gemini key/credit, and Admin → System status for the Veo models your key can use (GEMINI_VIDEO_MODEL).`);
+    }
+    return finalize(job, workerId, {
+      code: pe.kind === "moderation" ? "moderation_blocked" : pe.kind === "auth" ? "provider_unavailable" : pe.kind,
+      message: pe.kind === "moderation" ? "The provider's safety system blocked this video. Your credits were returned." : "The video could not be made. Your credits were returned.",
+    });
+  }
 }

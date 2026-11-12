@@ -41,6 +41,7 @@ export function StudioShell({ tool, access, characters, initialAssets, emailVeri
   const idem = useRef<string>("");
 
   const characterSlot = tool.slots.find((s) => s.role === "character");
+  const isVideo = tool.output === "video";
   const useSaved = !!characterSlot && characterId !== null;
 
   // Any input change invalidates the quote (quotes are immutable on the server).
@@ -246,16 +247,16 @@ export function StudioShell({ tool, access, characters, initialAssets, emailVeri
           <div className="mt-6 grid gap-4 sm:grid-cols-2">
             <Field label="Aspect ratio" htmlFor="ar">
               <select id="ar" className={inputCls} value={aspectRatio} disabled={inputsDisabled} onChange={(e) => setAspect(e.target.value as typeof aspectRatio)}>
-                {ASPECT_RATIOS.map((a) => <option key={a}>{a}</option>)}
+                {(isVideo ? (["9:16", "16:9"] as const) : ASPECT_RATIOS).map((a) => <option key={a} value={a}>{isVideo ? (a === "9:16" ? "9:16 vertical (Reels, TikTok)" : "16:9 wide (YouTube)") : a}</option>)}
               </select>
             </Field>
-            <Field label="Quality" htmlFor="quality">
+            {!isVideo && <Field label="Quality" htmlFor="quality">
               <select id="quality" className={inputCls} value={quality} disabled={inputsDisabled} onChange={(e) => setQuality(e.target.value as "standard" | "high")}>
                 <option value="standard">Standard</option>
                 <option value="high">High (more credits)</option>
               </select>
-            </Field>
-            <Field label="Style board" htmlFor="styleboard" hint={styleBoards.length ? "Applies a saved look (like a moodboard) to every image." : undefined}>
+            </Field>}
+            {!isVideo && <Field label="Style board" htmlFor="styleboard" hint={styleBoards.length ? "Applies a saved look (like a moodboard) to every image." : undefined}>
               {styleBoards.length ? (
                 <div className="flex items-center gap-2">
                   <select id="styleboard" className={inputCls} value={styleBoardId} disabled={inputsDisabled} onChange={(e) => setStyleBoardId(e.target.value)}>
@@ -271,7 +272,7 @@ export function StudioShell({ tool, access, characters, initialAssets, emailVeri
               ) : (
                 <p className="text-sm text-muted"><Link href="/styles" className="text-accent hover:underline">Create a style board</Link> to reuse a look across images.</p>
               )}
-            </Field>
+            </Field>}
             <Field label="Save to campaign" htmlFor="campaign" hint={campaigns.length ? "New images are also filed in this campaign folder." : undefined}>
               {campaigns.length ? (
                 <select id="campaign" className={inputCls} value={campaignId} disabled={inputsDisabled} onChange={(e) => setCampaignId(e.target.value)}>
@@ -282,7 +283,7 @@ export function StudioShell({ tool, access, characters, initialAssets, emailVeri
                 <p className="text-sm text-muted"><Link href="/campaigns" className="text-accent hover:underline">Create a campaign</Link> to keep projects together.</p>
               )}
             </Field>
-            {engines.length > 1 && (
+            {!isVideo && engines.length > 1 && (
               <Field label="Engine" htmlFor="engine" hint={engines.find((x) => x.key === engine)?.hint}>
                 <select id="engine" className={inputCls} value={engine} disabled={inputsDisabled} onChange={(e) => setEngine(e.target.value as EngineOption["key"])}>
                   {engines.map((x) => <option key={x.key} value={x.key}>{x.label}</option>)}
@@ -341,7 +342,7 @@ export function StudioShell({ tool, access, characters, initialAssets, emailVeri
           )}
         </Card>
 
-        {job && <JobPanel job={job} onCancel={cancel} onRegenerate={() => { setJob(null); getQuote(); }} />}
+        {job && <JobPanel job={job} isVideo={isVideo} onCancel={cancel} onRegenerate={() => { setJob(null); getQuote(); }} />}
 
         <Card>
           <h2 className="text-sm font-semibold">Good to know</h2>
@@ -355,7 +356,7 @@ export function StudioShell({ tool, access, characters, initialAssets, emailVeri
   );
 }
 
-function JobPanel({ job, onCancel, onRegenerate }: { job: Job; onCancel: () => void; onRegenerate: () => void }) {
+function JobPanel({ job, isVideo = false, onCancel, onRegenerate }: { job: Job; isVideo?: boolean; onCancel: () => void; onRegenerate: () => void }) {
   const done = TERMINAL.has(job.status);
   const tone = job.status === "succeeded" ? "live" : job.status === "partial" ? "coming_soon" : done ? "paused" : "beta";
   return (
@@ -380,7 +381,11 @@ function JobPanel({ job, onCancel, onRegenerate }: { job: Job; onCancel: () => v
                 <img src={fileUrl(o.assetId, { thumb: true })} alt={`Generated image ${o.index + 1}`} className="aspect-square w-full object-cover" />
               </a>
               <a href={fileUrl(o.assetId, { download: true })} className="absolute bottom-1 right-1 rounded bg-black/70 px-2 py-0.5 text-xs">Download</a>
-              <a href={`/text/${o.assetId}`} className="absolute bottom-1 left-1 rounded bg-black/70 px-2 py-0.5 text-xs">Aa Add text</a>
+              {isVideo ? (
+                <span className="pointer-events-none absolute inset-0 grid place-items-center"><span className="rounded-full bg-black/60 px-3 py-1.5 text-lg text-white">▶</span></span>
+              ) : (
+                <a href={`/text/${o.assetId}`} className="absolute bottom-1 left-1 rounded bg-black/70 px-2 py-0.5 text-xs">Aa Add text</a>
+              )}
             </li>
           ))}
         </ul>

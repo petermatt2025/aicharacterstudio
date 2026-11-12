@@ -71,6 +71,7 @@ const SETTING_VALIDATORS: Record<string, z.ZodType> = {
   price_openai_high_usd: z.number().nonnegative().max(5),
   price_gemini_standard_usd: z.number().nonnegative().max(5),
   price_gemini_high_usd: z.number().nonnegative().max(5),
+  price_video_usd: z.number().nonnegative().max(50),
   credit_value_usd: z.number().nonnegative().max(10),
   alert_cooldown_minutes: z.number().int().min(5).max(1440),
   signup_invites: z.array(z.string().trim().toLowerCase().email().max(254)).max(1000).transform((xs) => [...new Set(xs)]),

@@ -88,9 +88,14 @@ export default function Gallery() {
         <ul className={cx(view === "grid" ? "grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4" : "space-y-2")}>
           {items.map((a) => (
             <li key={a.id} className={cx("overflow-hidden rounded-xl border bg-surface", selected.includes(a.id) ? "border-accent" : "border-line", view === "list" && "flex items-center gap-3 p-2")}>
-              <a href={fileUrl(a.id)} target="_blank" rel="noreferrer" className={view === "list" ? "shrink-0" : ""}>
-                <img src={fileUrl(a.id, { thumb: true })} alt={a.title} className={view === "grid" ? "aspect-square w-full object-cover" : "h-16 w-16 rounded-lg object-cover"} />
-              </a>
+              {a.mime?.startsWith("video/") && view === "grid" ? (
+                <video src={fileUrl(a.id)} poster={fileUrl(a.id, { thumb: true })} controls playsInline preload="none" className="aspect-square w-full bg-black object-cover" />
+              ) : (
+                <a href={fileUrl(a.id)} target="_blank" rel="noreferrer" className={cx("relative block", view === "list" && "shrink-0")}>
+                  <img src={fileUrl(a.id, { thumb: true })} alt={a.title} className={view === "grid" ? "aspect-square w-full object-cover" : "h-16 w-16 rounded-lg object-cover"} />
+                  {a.mime?.startsWith("video/") && <span className="absolute inset-0 grid place-items-center text-white">▶</span>}
+                </a>
+              )}
               <div className={cx("flex flex-wrap items-center justify-between gap-2 p-2 text-xs", view === "list" && "flex-1")}>
                 <label className="flex items-center gap-1"><input type="checkbox" checked={selected.includes(a.id)} onChange={(e) => setSelected((s) => e.target.checked ? [...s, a.id] : s.filter((x) => x !== a.id))} /><span className="sr-only">Select {a.title}</span></label>
                 <span className="truncate text-muted">{TOOLS[a.featureKey ?? ""]?.title ?? a.title} · {a.width}×{a.height}{a.watermarked ? " · watermarked" : ""}</span>
@@ -98,13 +103,14 @@ export default function Gallery() {
                   <button onClick={() => toggleFav(a)} aria-pressed={!!a.favorite} aria-label="Favorite" className={a.favorite ? "text-accent" : "text-muted"}>★</button>
                   <a href={fileUrl(a.id, { download: true })} className="text-muted hover:text-ink">Download</a>
                 </span>
-                <div className="flex w-full flex-wrap gap-1" aria-label="Edit this image">
+                {!a.mime?.startsWith("video/") && <div className="flex w-full flex-wrap gap-1" aria-label="Edit this image">
+                  <a href={`/studio/animate?source=${a.id}`} className="rounded-full border border-accent/60 px-2 py-0.5 text-accent hover:bg-accent/10">🎬 Animate</a>
                   {EDIT_ACTIONS.map(([preset, label]) => (
                     <a key={preset} href={`/studio/image_edit?source=${a.id}&preset=${preset}`} className="rounded-full border border-line px-2 py-0.5 text-muted hover:border-accent hover:text-ink">{label}</a>
                   ))}
                   <a href={`/text/${a.id}`} className="rounded-full border border-line px-2 py-0.5 text-muted hover:border-accent hover:text-ink">Aa Add text</a>
                   <a href={`/studio/image_to_prompt?source=${a.id}`} className="rounded-full border border-line px-2 py-0.5 text-muted hover:border-accent hover:text-ink">Get prompt</a>
-                </div>
+                </div>}
               </div>
             </li>
           ))}

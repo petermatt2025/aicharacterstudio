@@ -65,6 +65,7 @@ export const FEATURES: FeatureSeed[] = [
   { key: "scene_recreation", toolNumber: 29, name: "Scene Recreation", studio: "scene", phase: 4, minTier: "agency", releaseState: p34, description: "Original recreations inspired by a source composition." },
   { key: "batch_campaigns", toolNumber: 30, name: "Batch Campaign Generator", studio: "ugc_ads", phase: 4, minTier: "agency", releaseState: p34, description: "Queued multi-format images from a campaign brief." },
   // Cross-cutting capabilities (not one of the 30 tool IDs).
+  { key: "animate", toolNumber: null, name: "Photo Animator", studio: "content", phase: 1, minTier: "pro", releaseState: "beta", description: "Turn any photo into a short video with natural motion (Pro and Agency)." },
   { key: "image_edit", toolNumber: null, name: "Image Editor", studio: "mixer", phase: 1, minTier: "creator", releaseState: "beta", description: "Edit, enhance, upscale, expand or remove the background of any image." },
   { key: "photoshoot", toolNumber: null, name: "One-Click Photoshoot", studio: "character", phase: 1, minTier: "creator", releaseState: p1, description: "Many varied scenes of one character from a preset recipe." },
 ];
@@ -102,6 +103,7 @@ export const CREDIT_RULES: Array<{ key: string; label: string; credits: number; 
   { key: "angle_sheet", label: "Character angle sheet", credits: 12, perOutputs: 4 },
   { key: "photoshoot", label: "One-click photoshoot", credits: 36, perOutputs: 12 },
   { key: "upscale", label: "Upscale / enhance", credits: 2, perOutputs: 1 },
+  { key: "video", label: "Animated video (photo to video)", credits: 40, perOutputs: 1 },
 ];
 
 export const TOPUP_PACKS: Array<{ key: string; displayName: string; priceCents: number; credits: number }> = [

@@ -13,7 +13,7 @@ export default async function StylesPage() {
       <PageHeader title="Style boards" sub="Collect images to define a look, then apply it to any tool or to images you already made." />
       <StyleBoards
         initialBoards={boards.map((b) => ({ id: b.id, name: b.name, description: b.description, assetIds: b.asset_ids }))}
-        initialAssets={assets.filter((a) => a.kind === "output" || a.kind === "style").map((a) => JSON.parse(JSON.stringify(assetView(a))))}
+        initialAssets={assets.filter((a) => (a.kind === "output" || a.kind === "style") && !a.mime.startsWith("video/")).map((a) => JSON.parse(JSON.stringify(assetView(a))))}
       />
     </div>
   );

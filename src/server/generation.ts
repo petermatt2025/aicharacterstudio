@@ -15,6 +15,7 @@ import { getBoard } from "./style-boards";
 import { getCampaign } from "./campaigns";
 import { raiseAlert } from "./alerts";
 import { trialBudgetExhausted } from "./trial";
+import { videoConfigured } from "./providers/video";
 import { APP_MAX_REFERENCES } from "./providers/capabilities";
 import { buildShots, type Shot } from "./prompting";
 import type { AspectRatio, Quality, ReferenceRole } from "./providers/types";
@@ -72,6 +73,10 @@ export function computeCredits(args: { tool: ToolDef; rules: Rules; refs: number
   };
   let ruleKey: string;
   let perOutput: number;
+  if (tool.creditRule === "video") {
+    // Flat price per video (quality, references and identity options don't apply).
+    return { credits: Math.ceil(rate("video") * outputs * multiplier - 1e-9), ruleKey: "video", perOutput: rate("video"), multiplier };
+  }
   if (tool.creditRule === "angle_sheet" || tool.creditRule === "photoshoot") {
     ruleKey = tool.creditRule;
     perOutput = rate(ruleKey);
@@ -151,8 +156,8 @@ export async function createQuote(user: SessionUser, input: z.input<typeof quote
 
   // Ownership + consent of every reference.
   const ids = [...new Set(refs.map((r) => r.assetId))];
-  const rows = await q<{ id: string; kind: string; consent_receipt_id: string | null; moderation_status: string }>(
-    `SELECT id, kind, consent_receipt_id, moderation_status FROM assets WHERE id = ANY($1) AND workspace_id=$2 AND deleted_at IS NULL`,
+  const rows = await q<{ id: string; kind: string; consent_receipt_id: string | null; moderation_status: string; mime: string }>(
+    `SELECT id, kind, consent_receipt_id, moderation_status, mime FROM assets WHERE id = ANY($1) AND workspace_id=$2 AND deleted_at IS NULL`,
     [ids, user.workspaceId],
   );
   if (rows.length !== ids.length) throw new AppError("not_found", "One or more reference images were not found.");
@@ -163,6 +168,7 @@ export async function createQuote(user: SessionUser, input: z.input<typeof quote
     const personSlot = r.role === "character" || !!tool.slots.find((sl) => sl.role === r.role)?.person;
     if (personSlot && a.kind !== "character") throw new AppError("consent_required", "Only photos uploaded as Character (with person consent) can be used for a person.");
     if (a.kind !== "output" && !a.consent_receipt_id) throw new AppError("consent_required", "A reference image is missing a rights confirmation.");
+    if (a.mime.startsWith("video/")) throw new AppError("validation_failed", "Videos can't be used as a reference. Pick a photo.");
   }
 
   // Presets.
@@ -206,6 +212,10 @@ export async function createQuote(user: SessionUser, input: z.input<typeof quote
   }
 
   // Provider readiness + capability fallback.
+  if (tool.output === "video") {
+    if (!videoConfigured()) throw new AppError("provider_not_configured", "Video isn't set up yet (needs the Gemini engine).");
+    if (req.aspectRatio !== "16:9" && req.aspectRatio !== "9:16") req.aspectRatio = "9:16";
+  }
   const engines = availableEngines();
   if (req.engine && !engines.includes(req.engine)) throw new AppError("provider_not_configured", "That image engine is not available right now.");
   const freeTrial = limitsPlanKey(user) === "free";

@@ -3,6 +3,7 @@ import { one, q } from "./db";
 import { env } from "./env";
 import { storage } from "./storage";
 import { availableEngines } from "./providers";
+import { listVeoModels } from "./providers/video";
 import { billingConfigured, stripe } from "./billing";
 import { getSetting } from "./seed";
 
@@ -67,6 +68,18 @@ export async function systemStatus() {
       return { ok: !failing, detail: `24h: ${r!.good} ok, ${r!.bad} failed${lastErr}${lastOk}` };
     });
   }
+
+  await add("Video engine (Veo)", async () => {
+    if (e.IMAGE_PROVIDER === "fake") return { ok: null, detail: "test mode (fake video engine)" };
+    if (!e.GEMINI_API_KEY) return { ok: null, detail: "not configured (needs GEMINI_API_KEY)" };
+    const models = await listVeoModels();
+    const has = models.includes(e.GEMINI_VIDEO_MODEL);
+    const fallback = models.includes("veo-3.1-generate-preview");
+    return {
+      ok: has || fallback,
+      detail: `${has ? `using ${e.GEMINI_VIDEO_MODEL}` : fallback ? `${e.GEMINI_VIDEO_MODEL} not available, will use veo-3.1-generate-preview` : `${e.GEMINI_VIDEO_MODEL} not available`} · available: ${models.join(", ") || "none"}`,
+    };
+  });
 
   await add("Storage", async () => {
     const key = `healthcheck/${Date.now()}.txt`;

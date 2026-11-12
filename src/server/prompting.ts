@@ -49,6 +49,7 @@ const FEATURE_FRAME: Record<string, string> = {
   video_prep: "Create one still frame for an image-to-video tool. Keep the character, outfit, location, lighting and camera consistent across all frames of the set.",
   restore_enhance: "Restore the referenced old photograph. Keep the same people, faces, expressions, pose and composition; do not modernize clothing or change the scene.",
   scene_recreation: "Create an ORIGINAL photo of the same person using only the mood, lighting and composition of the inspiration reference.",
+  animate: "Animate the source photo into a short, realistic video clip. Start exactly from the photo; keep the same people, faces, clothes, setting and lighting. Smooth, natural motion; no cuts, no text overlays.",
   image_edit: "Edit the source image as instructed. This is a photo edit, not a new image: preserve identity, composition and every detail that is not part of the edit.",
   batch_campaigns: "Create one campaign asset in the requested format. Keep a consistent brand look across formats. If the brief contains text in quotes, render exactly that text, legible.",
 };

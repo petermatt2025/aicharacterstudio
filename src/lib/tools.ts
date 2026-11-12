@@ -50,7 +50,9 @@ export type ToolDef = {
   allowVariations: boolean; // outputs per shot
   promptPlaceholder: string;
   promptRequired: boolean;
-  creditRule: "auto" | "angle_sheet" | "photoshoot";
+  creditRule: "auto" | "angle_sheet" | "photoshoot" | "video";
+  /** Output type (default image). Video tools run through the video engine. */
+  output?: "image" | "video";
 };
 
 /** Implemented tools that don't generate images through the studio shell (own page + API). */
@@ -945,6 +947,41 @@ export const EDITOR_TOOLS: Record<string, ToolDef> = {
   },
 };
 Object.assign(TOOLS, EDITOR_TOOLS);
+
+/** Photo Animator: one photo in, a short video out (Veo). Premium: Pro and Agency, 40 credits per video. */
+export const VIDEO_TOOLS: Record<string, ToolDef> = {
+  animate: {
+    key: "animate",
+    title: "Photo Animator",
+    tagline: "Bring any photo to life as a short video.",
+    instructions: ["Pick a photo you created or upload one.", "Choose a motion and the shape (vertical for Reels/TikTok, wide for YouTube).", "Generate. A 6-second video arrives in about 1–3 minutes."],
+    examples: ["Reels and TikTok from your best photos", "Moving product shots", "Animated profile or banner"],
+    warnings: ["Video is AI-generated: faces and hands can change during motion. Only animate people who agreed to it.", "Each video uses 40 credits."],
+    slots: [{ role: "other", label: "Photo to animate", hint: "Choose from your Gallery or upload a photo you have the right to use.", required: true, uploadKind: "other", pickOutputs: true, promptLabel: "START FRAME: animate this exact image; keep the same people, faces, clothes and setting." }],
+    presetLabel: "Motion",
+    presets: [
+      { key: "natural", label: "Natural life", prompt: "subtle natural motion: gentle breathing, blinking, a slight smile, hair moving softly; the camera stays almost still" },
+      { key: "smile", label: "Turn and smile", prompt: "the person slowly turns toward the camera and gives a warm, natural smile" },
+      { key: "walk", label: "Walk forward", prompt: "the person starts walking naturally toward the camera; the camera tracks back smoothly" },
+      { key: "wind", label: "Wind and light", prompt: "a soft breeze moves hair and clothes; light flickers gently across the scene" },
+      { key: "push_in", label: "Camera push-in", prompt: "slow cinematic camera push-in toward the subject; the subject stays natural" },
+      { key: "orbit", label: "Camera orbit", prompt: "the camera slowly orbits a little around the subject, revealing depth; smooth and cinematic" },
+      { key: "product_spin", label: "Product showcase", prompt: "the product turns slowly and catches the light, premium commercial look" },
+    ],
+    presetMode: "single",
+    minPresets: 1,
+    maxPresets: 1,
+    defaultPresets: ["natural"],
+    defaultAspect: "9:16",
+    allowVariations: false,
+    promptPlaceholder: "Optional: describe the motion, e.g. 'she laughs and looks at the sunset, hair blowing in the wind'",
+    promptRequired: false,
+    creditRule: "video",
+    output: "video",
+  },
+};
+Object.assign(TOOLS, VIDEO_TOOLS);
+
 
 
 

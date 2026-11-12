@@ -143,6 +143,7 @@ const TOOL_GROUPS: Record<string, BuilderGroupKey[]> = {
   scene_recreation: ["mood", "wardrobe"],
   batch_campaigns: ["style", "mood", "setting"],
   image_edit: ["style", "lighting"],
+  animate: ["mood"],
 };
 
 /** Ready-made situations per tool. Text in quotes is rendered as exact on-image text by the text tools. */
@@ -311,6 +312,12 @@ Object.assign(TOOL_IDEAS, {
     { label: "Black Friday", text: "Black Friday sale, headline \"40% OFF THIS WEEK\"" },
     { label: "New launch", text: "new product launch, headline \"IT'S HERE\"" },
     { label: "Webinar", text: "free live webinar promotion, headline \"FREE LIVE TRAINING\"" },
+  ],
+  animate: [
+    { label: "Laugh & sunset", text: "she laughs and looks toward the sunset, hair blowing in the wind" },
+    { label: "Coffee sip", text: "takes a slow sip of coffee, then smiles at the camera" },
+    { label: "Wave hello", text: "looks at the camera and waves hello warmly" },
+    { label: "Product reveal", text: "lifts the product toward the camera and turns it slowly" },
   ],
   image_edit: [
     { label: "Remove object", text: "remove the object in the background, fill naturally" },

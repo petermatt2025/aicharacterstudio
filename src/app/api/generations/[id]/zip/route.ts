@@ -2,7 +2,7 @@ import JSZip from "jszip";
 import { route, requireUser } from "@/server/http";
 import { getJob } from "@/server/generation";
 import { readAssetBytes } from "@/server/assets";
-import { EXT } from "@/server/images";
+import { FILE_EXT } from "@/server/images";
 import { AppError } from "@/server/errors";
 
 export const GET = route<{ id: string }>(async (req, { params }) => {
@@ -12,7 +12,7 @@ export const GET = route<{ id: string }>(async (req, { params }) => {
   const zip = new JSZip();
   for (const o of job.outputs) {
     const { bytes, mime } = await readAssetBytes(u, o.assetId, "original");
-    zip.file(`${job.featureKey}-${o.index + 1}.${EXT[mime as keyof typeof EXT]}`, bytes);
+    zip.file(`${job.featureKey}-${o.index + 1}.${FILE_EXT[mime] ?? "bin"}`, bytes);
   }
   zip.file("README.txt", "AI-generated (synthetic) images. Likeness, products and text may be inaccurate. Review before commercial use.\n");
   const buf = await zip.generateAsync({ type: "uint8array", compression: "STORE" });

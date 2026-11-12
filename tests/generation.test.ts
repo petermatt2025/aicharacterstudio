@@ -721,3 +721,54 @@ describe("free trial protection", () => {
     expect((await verifyEmail(await verificationTokenFor(other))).trialGranted).toBe(15);
   });
 });
+
+describe("photo animator (video)", () => {
+  beforeAll(async () => {
+    await q(`UPDATE features SET release_state='beta' WHERE key='animate'`);
+  });
+
+  it("Pro users turn a photo into a stored MP4 for 40 credits; Free and Creator can't; videos can't be references", async () => {
+    const u = await makeUser({ plan: "pro", credits: 100 });
+    const c = await upload(u);
+    const start = (await balanceOf(u.workspaceId)).balance;
+    const { quote, job } = await run(u, { featureKey: "animate", references: [{ assetId: c.id, role: "other" }], presetKeys: ["smile"], aspectRatio: "4:5", quality: "high" });
+    expect(quote.credits).toBe(40);
+    expect(job.status).toBe("succeeded");
+    expect(job.outputs).toHaveLength(1);
+    expect((await balanceOf(u.workspaceId)).balance).toBe(start - 40);
+    const a = await one<{ mime: string; width: number; height: number; thumb_key: string | null }>(`SELECT mime, width, height, thumb_key FROM assets WHERE id=$1`, [job.outputs[0]!.assetId]);
+    expect(a).toMatchObject({ mime: "video/mp4", width: 720, height: 1280 }); // 4:5 coerced to vertical 9:16
+    expect(a!.thumb_key).toBeTruthy();
+    await expect(createQuote(u, { featureKey: "image_edit", references: [{ assetId: job.outputs[0]!.assetId, role: "other" }], presetKeys: ["enhance"] })).rejects.toMatchObject({ code: "validation_failed" });
+
+    const creator = await makeUser({ plan: "creator", credits: 100 });
+    const cc = await upload(creator);
+    await expect(createQuote(creator, { featureKey: "animate", references: [{ assetId: cc.id, role: "other" }], presetKeys: ["natural"] })).rejects.toMatchObject({ code: "plan_required" });
+    await q(`UPDATE app_settings SET value='["*"]' WHERE key='trial_features'`);
+    try {
+      const free = await makeUser({ plan: "free", beta: false });
+      const fc = await upload(free);
+      await expect(createQuote(free, { featureKey: "animate", references: [{ assetId: fc.id, role: "other" }], presetKeys: ["natural"] })).rejects.toMatchObject({ code: expect.stringMatching(/plan_required|feature_unavailable/) });
+    } finally {
+      await q(`UPDATE app_settings SET value='[]' WHERE key='trial_features'`);
+    }
+  });
+
+  it("a failed video refunds all credits", async () => {
+    const u = await makeUser({ plan: "pro", credits: 100 });
+    const c = await upload(u);
+    const start = (await balanceOf(u.workspaceId)).balance;
+    const { job } = await run(u, { featureKey: "animate", references: [{ assetId: c.id, role: "other" }], presetKeys: ["natural"], prompt: "[[fake:video-fail]]" });
+    expect(job.status).toBe("failed");
+    expect((await balanceOf(u.workspaceId)).balance).toBe(start);
+  });
+
+  it("maps Veo errors to the right kinds", async () => {
+    const { mapVeoError } = await import("@/server/providers/video");
+    expect(mapVeoError(new Error("PERMISSION_DENIED: API key not valid")).kind).toBe("auth");
+    expect(mapVeoError(new Error("models/veo-x is not found for API version v1beta")).kind).toBe("invalid_request");
+    expect(mapVeoError(new Error("429 RESOURCE_EXHAUSTED")).kind).toBe("rate_limit");
+    expect(mapVeoError(new Error("Video blocked by Responsible AI filters")).kind).toBe("moderation");
+    expect(mapVeoError(new Error("503 UNAVAILABLE")).kind).toBe("transient");
+  });
+});

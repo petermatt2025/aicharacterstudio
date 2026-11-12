@@ -54,7 +54,11 @@ export async function trialFeatures(): Promise<string[]> {
   return Array.isArray(v) ? v.map(String) : ["*"];
 }
 
+/** Expensive tools are never part of the free trial, even with "*". */
+const NEVER_IN_TRIAL = new Set(["animate"]);
+
 export async function isTrialFeature(key: string): Promise<boolean> {
+  if (NEVER_IN_TRIAL.has(key)) return false;
   const list = await trialFeatures();
   return list.includes("*") || list.includes(key);
 }

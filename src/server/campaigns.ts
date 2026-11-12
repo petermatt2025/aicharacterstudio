@@ -5,7 +5,7 @@ import type { SessionUser } from "./accounts";
 import { one, q, tx } from "./db";
 import { AppError } from "./errors";
 import { readAssetBytes } from "./assets";
-import { EXT } from "./images";
+import { FILE_EXT } from "./images";
 
 /** Campaign folders: a name + brief and a set of the workspace's own images. */
 export const MAX_CAMPAIGNS = 100;
@@ -105,7 +105,7 @@ export async function campaignZip(user: SessionUser, id: string) {
   let n = 0;
   for (const a of c.asset_ids.slice(0, 300)) {
     const { bytes, mime } = await readAssetBytes(user, a, "original");
-    zip.file(`${String(++n).padStart(3, "0")}.${EXT[mime as keyof typeof EXT]}`, bytes);
+    zip.file(`${String(++n).padStart(3, "0")}.${FILE_EXT[mime] ?? "bin"}`, bytes);
   }
   zip.file("BRIEF.txt", `${c.name}\n\n${c.brief || "(no brief)"}\n\nAI-generated (synthetic) images. Likeness, products and text may be inaccurate. Review before commercial use.\n`);
   const buf = await zip.generateAsync({ type: "uint8array", compression: "STORE" });

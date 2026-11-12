@@ -4,7 +4,7 @@ import { ALLOWED_CONSENT, CONSENT_LABELS, type ConsentSubject, type UploadKind }
 import { api, fileUrl } from "@/lib/api";
 import { Button, Notice, cx } from "./ui";
 
-export type AssetLite = { id: string; kind: string; title: string; width: number; height: number; createdAt: string; featureKey?: string | null; favorite?: boolean; watermarked?: boolean };
+export type AssetLite = { id: string; kind: string; mime?: string; title: string; width: number; height: number; createdAt: string; featureKey?: string | null; favorite?: boolean; watermarked?: boolean };
 
 /** Upload with a mandatory rights/consent confirmation. The server re-validates everything. */
 export function Uploader({ kind, onUploaded, compact }: { kind: UploadKind; onUploaded: (a: AssetLite) => void; compact?: boolean }) {
@@ -59,7 +59,7 @@ export function Uploader({ kind, onUploaded, compact }: { kind: UploadKind; onUp
 /** Choose an existing private asset of a kind, or upload a new one. */
 export function AssetPicker({ kind, assets, value, onChange, onUploaded, label, includeOutputs = false }: { kind: UploadKind; assets: AssetLite[]; value: string | null; onChange: (id: string | null) => void; onUploaded: (a: AssetLite) => void; label: string; includeOutputs?: boolean }) {
   const [open, setOpen] = useState(false);
-  const mine = assets.filter((a) => a.kind === kind || (includeOutputs && a.kind === "output"));
+  const mine = assets.filter((a) => !a.mime?.startsWith("video/") && (a.kind === kind || (includeOutputs && a.kind === "output")));
   const selected = assets.find((a) => a.id === value);
   return (
     <div className="space-y-2">

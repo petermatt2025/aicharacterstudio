@@ -8,8 +8,9 @@ import { Card, Notice, cx } from "./ui";
 export function TextPicker({ assets, emailVerified }: { assets: AssetLite[]; emailVerified: boolean }) {
   const router = useRouter();
   const [tab, setTab] = useState<"created" | "uploads">(assets.some((a) => a.kind === "output") ? "created" : "uploads");
-  const created = assets.filter((a) => a.kind === "output");
-  const uploads = assets.filter((a) => a.kind !== "output");
+  const photos = assets.filter((a) => !a.mime?.startsWith("video/"));
+  const created = photos.filter((a) => a.kind === "output");
+  const uploads = photos.filter((a) => a.kind !== "output");
   const list = tab === "created" ? created : uploads;
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
