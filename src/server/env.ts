@@ -47,6 +47,12 @@ const schema = z.object({
   GEMINI_TEXT_MODEL: z.string().default("gemini-3.5-flash-lite"),
   // Photo-to-video (Veo). The status page lists the Veo models your key can use; set this to one of them.
   GEMINI_VIDEO_MODEL: z.string().default("veo-3.1-fast-generate-preview"),
+  // Kling AI (preferred video engine when its keys are set). Keys from Kling's developer console.
+  KLING_ACCESS_KEY: z.string().optional(),
+  KLING_SECRET_KEY: z.string().optional(),
+  KLING_MODEL: z.string().default("kling-v2-1"),
+  KLING_MODE: z.enum(["std", "pro"]).default("std"),
+  KLING_API_BASE: z.string().url().default("https://api-singapore.klingai.com"),
   // Engine preselected in the studio when both are configured.
   DEFAULT_IMAGE_ENGINE: z.enum(["openai", "gemini"]).default("openai"),
   MODERATION_PROVIDER: z.enum(["openai", "baseline"]).default("openai"),

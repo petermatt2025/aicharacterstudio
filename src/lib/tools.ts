@@ -954,7 +954,7 @@ export const VIDEO_TOOLS: Record<string, ToolDef> = {
     key: "animate",
     title: "Photo Animator",
     tagline: "Bring any photo to life as a short video.",
-    instructions: ["Pick a photo you created or upload one.", "Choose a motion and the shape (vertical for Reels/TikTok, wide for YouTube).", "Generate. A 6-second video arrives in about 1–3 minutes."],
+    instructions: ["Pick a photo you created or upload one.", "Choose a motion and the shape (vertical for Reels/TikTok, wide for YouTube).", "Generate. A 5–6 second video arrives in about 1–5 minutes."],
     examples: ["Reels and TikTok from your best photos", "Moving product shots", "Animated profile or banner"],
     warnings: ["Video is AI-generated: faces and hands can change during motion. Only animate people who agreed to it.", "Each video uses 40 credits."],
     slots: [{ role: "other", label: "Photo to animate", hint: "Choose from your Gallery or upload a photo you have the right to use.", required: true, uploadKind: "other", pickOutputs: true, promptLabel: "START FRAME: animate this exact image; keep the same people, faces, clothes and setting." }],

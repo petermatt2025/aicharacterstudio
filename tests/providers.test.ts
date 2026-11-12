@@ -181,3 +181,53 @@ describe("OpenAI error mapping", () => {
     expect(mapOpenAIError(rl).kind).toBe("rate_limit");
   });
 });
+
+describe("Kling video engine", () => {
+  const ok = (data: unknown) => new Response(JSON.stringify({ code: 0, message: "SUCCEED", data }), { status: 200 });
+
+  it("signs a valid HS256 JWT with the access key as issuer", async () => {
+    const { klingToken } = await import("@/server/providers/kling");
+    const crypto = await import("node:crypto");
+    const t = klingToken("AK123", "SK456", 1_800_000_000);
+    const [h, b, sig] = t.split(".");
+    expect(JSON.parse(Buffer.from(h!, "base64url").toString())).toEqual({ alg: "HS256", typ: "JWT" });
+    expect(JSON.parse(Buffer.from(b!, "base64url").toString())).toEqual({ iss: "AK123", exp: 1_800_001_800, nbf: 1_799_999_995 });
+    expect(sig).toBe(crypto.createHmac("sha256", "SK456").update(`${h}.${b}`).digest("base64url"));
+  });
+
+  it("creates an image-to-video task cropped to the requested shape, polls until done and downloads the MP4", async () => {
+    const { KlingVideoProvider } = await import("@/server/providers/kling");
+    const sharp = (await import("sharp")).default;
+    const calls: Array<{ url: string; method: string; body?: Record<string, unknown>; auth?: string }> = [];
+    let polls = 0;
+    const fakeFetch = (async (url: string, init: RequestInit = {}) => {
+      const body = typeof init.body === "string" ? JSON.parse(init.body) : undefined;
+      calls.push({ url, method: init.method ?? "GET", body, auth: (init.headers as Record<string, string> | undefined)?.authorization });
+      if (url.endsWith("/v1/videos/image2video") && init.method === "POST") return ok({ task_id: "t1", task_status: "submitted" });
+      if (url.endsWith("/v1/videos/image2video/t1")) return ++polls < 2 ? ok({ task_id: "t1", task_status: "processing" }) : ok({ task_id: "t1", task_status: "succeed", task_result: { videos: [{ url: "https://cdn.kling.test/v.mp4" }] } });
+      if (url === "https://cdn.kling.test/v.mp4") return new Response(new Uint8Array([0, 0, 0, 24, 102, 116, 121, 112]), { status: 200 });
+      return new Response("{}", { status: 404 });
+    }) as unknown as typeof fetch;
+    const p = new KlingVideoProvider({ accessKey: "AK", secretKey: "SK", model: "kling-v2-1", mode: "std", fetch: fakeFetch, pollMs: 1 });
+    const photo = await sharp({ create: { width: 800, height: 800, channels: 3, background: "#a55" } }).png().toBuffer();
+    let waits = 0;
+    const r = await p.generate({ prompt: "she smiles", image: { bytes: photo, mime: "image/png" }, aspectRatio: "9:16", seconds: 6, onWait: async () => (++waits, true) });
+    expect(r).toMatchObject({ provider: "kling", model: "kling-v2-1", mime: "video/mp4", width: 720, height: 1280 });
+    expect(r.bytes.length).toBe(8);
+    const create = calls[0]!;
+    expect(create.auth).toMatch(/^Bearer [\w-]+\.[\w-]+\.[\w-]+$/);
+    expect(create.body).toMatchObject({ model_name: "kling-v2-1", mode: "std", duration: "5", prompt: "she smiles" });
+    const sent = await sharp(Buffer.from(String(create.body!.image), "base64")).metadata();
+    expect([sent.width, sent.height]).toEqual([720, 1280]); // cropped to vertical
+    expect(waits).toBeGreaterThanOrEqual(2);
+  });
+
+  it("maps Kling errors (keys, balance, content, rate limits) to the right kinds", async () => {
+    const { mapKlingError } = await import("@/server/providers/kling");
+    expect(mapKlingError(401, 1002, "Authorization is invalid").kind).toBe("auth");
+    expect(mapKlingError(429, 1102, "Account balance not enough").kind).toBe("auth");
+    expect(mapKlingError(400, 1301, "Trigger the content security policy").kind).toBe("moderation");
+    expect(mapKlingError(429, 1302, "Too many requests").kind).toBe("rate_limit");
+    expect(mapKlingError(500, 5000, "Server error").kind).toBe("transient");
+  });
+});

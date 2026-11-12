@@ -3,6 +3,7 @@ import { GoogleGenAI } from "@google/genai";
 import { env } from "../env";
 import { AppError } from "../errors";
 import { ProviderError } from "./types";
+import { KlingVideoProvider } from "./kling";
 
 /** Photo → short video. One engine for now (Google Veo via the Gemini API key). */
 export type VideoRequest = {
@@ -119,13 +120,16 @@ export function videoProvider(): VideoProvider {
     if (e.APP_ENV === "production" || e.APP_ENV === "staging") throw new Error("Fake provider is forbidden in production");
     return (cached = new FakeVideoProvider());
   }
-  if (!e.GEMINI_API_KEY) throw new AppError("provider_not_configured", "Video needs the Gemini engine (GEMINI_API_KEY).");
+  if (e.KLING_ACCESS_KEY && e.KLING_SECRET_KEY) {
+    return (cached = new KlingVideoProvider({ accessKey: e.KLING_ACCESS_KEY, secretKey: e.KLING_SECRET_KEY, model: e.KLING_MODEL, mode: e.KLING_MODE, baseUrl: e.KLING_API_BASE }));
+  }
+  if (!e.GEMINI_API_KEY) throw new AppError("provider_not_configured", "Video isn't set up yet (add Kling keys or a Gemini key with Veo access).");
   return (cached = new VeoVideoProvider({ apiKey: e.GEMINI_API_KEY, model: e.GEMINI_VIDEO_MODEL, fallbackModel: "veo-3.1-generate-preview" }));
 }
 
 export function videoConfigured(): boolean {
   const e = env();
-  return e.IMAGE_PROVIDER === "fake" || !!e.GEMINI_API_KEY;
+  return e.IMAGE_PROVIDER === "fake" || !!(e.KLING_ACCESS_KEY && e.KLING_SECRET_KEY) || !!e.GEMINI_API_KEY;
 }
 
 /** Status page helper: which Veo models this key can use (native list endpoint). */

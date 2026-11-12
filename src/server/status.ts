@@ -4,6 +4,7 @@ import { env } from "./env";
 import { storage } from "./storage";
 import { availableEngines } from "./providers";
 import { listVeoModels } from "./providers/video";
+import { KlingVideoProvider } from "./providers/kling";
 import { billingConfigured, stripe } from "./billing";
 import { getSetting } from "./seed";
 
@@ -69,15 +70,19 @@ export async function systemStatus() {
     });
   }
 
-  await add("Video engine (Veo)", async () => {
+  await add("Video engine", async () => {
     if (e.IMAGE_PROVIDER === "fake") return { ok: null, detail: "test mode (fake video engine)" };
-    if (!e.GEMINI_API_KEY) return { ok: null, detail: "not configured (needs GEMINI_API_KEY)" };
+    if (e.KLING_ACCESS_KEY && e.KLING_SECRET_KEY) {
+      const k = new KlingVideoProvider({ accessKey: e.KLING_ACCESS_KEY, secretKey: e.KLING_SECRET_KEY, model: e.KLING_MODEL, mode: e.KLING_MODE, baseUrl: e.KLING_API_BASE });
+      return { ok: true, detail: `Kling ${e.KLING_MODEL} (${e.KLING_MODE}) · ${await k.check()}` };
+    }
+    if (!e.GEMINI_API_KEY) return { ok: null, detail: "not configured (add KLING_ACCESS_KEY and KLING_SECRET_KEY)" };
     const models = await listVeoModels();
     const has = models.includes(e.GEMINI_VIDEO_MODEL);
     const fallback = models.includes("veo-3.1-generate-preview");
     return {
       ok: has || fallback,
-      detail: `${has ? `using ${e.GEMINI_VIDEO_MODEL}` : fallback ? `${e.GEMINI_VIDEO_MODEL} not available, will use veo-3.1-generate-preview` : `${e.GEMINI_VIDEO_MODEL} not available`} · available: ${models.join(", ") || "none"}`,
+      detail: `Google Veo: ${has ? `using ${e.GEMINI_VIDEO_MODEL}` : fallback ? `${e.GEMINI_VIDEO_MODEL} not available, will use veo-3.1-generate-preview` : `${e.GEMINI_VIDEO_MODEL} not available`} · available: ${models.join(", ") || "none"}`,
     };
   });
 
