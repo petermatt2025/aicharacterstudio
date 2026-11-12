@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { OpenAIImageProvider } from "@/server/providers/openai";
+import { GeminiImageProvider } from "@/server/providers/gemini";
+import { ProviderError } from "@/server/providers/types";
 import { OPENAI_MODEL_CAPABILITIES, providerSize } from "@/server/providers/capabilities";
 import { computeCredits } from "@/server/generation";
 import { TOOLS } from "@/lib/tools";
@@ -108,5 +110,53 @@ describe("sizes, credits, prompts", () => {
     expect(baselineModerate("a nude photo").flagged).toBe(true);
     expect(baselineModerate("real customer testimonial with results").categories).toContain("deceptive_endorsement");
     expect(baselineModerate("a person drinking coffee").flagged).toBe(false);
+  });
+});
+
+describe("Gemini image provider", () => {
+  const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+  const req = (over: Partial<Parameters<GeminiImageProvider["generate"]>[0]> = {}) => ({
+    userId: "u1", workspaceId: "w1", featureKey: "environment_switch", prompt: "in a café", references: [],
+    referenceImages: [], requestedOutputs: 1, aspectRatio: "9:16" as const, quality: "standard" as const, ...over,
+  });
+
+  it("sends labeled references + prompt to generateContent with aspect ratio and size, and returns the image", async () => {
+    const { fn, calls } = mockFetch(() => json(200, { candidates: [{ content: { parts: [{ inlineData: { mimeType: "image/png", data: PNG_B64 } }] }, finishReason: "STOP" }], usageMetadata: { promptTokenCount: 300, candidatesTokenCount: 1290 } }));
+    const p = new GeminiImageProvider({ apiKey: "k", model: "gemini-3.1-flash-image", timeoutMs: 5000, fetch: fn });
+    const bytes = await pngBytes(64, 64);
+    const r = await p.generate(req({ referenceImages: [{ role: "character", bytes, mime: "image/png" }], quality: "high" }));
+    expect(calls[0]!.url).toMatch(/\/models\/gemini-3\.1-flash-image:generateContent$/);
+    const body = calls[0]!.body as { contents: Array<{ parts: Array<Record<string, unknown>> }>; generationConfig: { responseModalities: string[]; imageConfig: Record<string, string> } };
+    expect(body.generationConfig).toEqual({ responseModalities: ["IMAGE"], imageConfig: { aspectRatio: "9:16", imageSize: "2K" } });
+    const parts = body.contents[0]!.parts;
+    expect(parts[0]!.text).toMatch(/Reference image 1: the person/);
+    expect(parts[1]!.inlineData).toMatchObject({ mimeType: "image/png" });
+    expect(parts.at(-1)!.text).toBe("in a café");
+    expect(r).toMatchObject({ provider: "gemini", model: "gemini-3.1-flash-image", usage: { input_tokens: 300, output_tokens: 1290 } });
+    expect(r.outputs[0]!.bytes.length).toBeGreaterThan(10);
+  });
+
+  it("omits imageSize on gemini-2.5-flash-image", async () => {
+    const { fn, calls } = mockFetch(() => json(200, { candidates: [{ content: { parts: [{ inlineData: { mimeType: "image/png", data: PNG_B64 } }] } }] }));
+    await new GeminiImageProvider({ apiKey: "k", model: "gemini-2.5-flash-image", timeoutMs: 5000, fetch: fn }).generate(req());
+    expect((calls[0]!.body as { generationConfig: { imageConfig: object } }).generationConfig.imageConfig).toEqual({ aspectRatio: "9:16" });
+  });
+
+  it("maps safety blocks, billing, rate limits and empty responses to the right error kinds", async () => {
+    const run = async (res: Response) => {
+      const p = new GeminiImageProvider({ apiKey: "k", model: "gemini-3.1-flash-image", timeoutMs: 5000, fetch: mockFetch(() => res).fn });
+      return p.generate(req()).then(() => "ok", (e: ProviderError) => e.kind);
+    };
+    expect(await run(json(200, { promptFeedback: { blockReason: "SAFETY" } }))).toBe("moderation");
+    expect(await run(json(200, { candidates: [{ content: { parts: [{ text: "no" }] }, finishReason: "IMAGE_SAFETY" }] }))).toBe("moderation");
+    expect(await run(json(200, { candidates: [{ content: { parts: [{ text: "hmm" }] }, finishReason: "STOP" }] }))).toBe("transient");
+    expect(await run(json(402, { error: { code: 402, message: "Your prepayment credits are depleted.", status: "RESOURCE_EXHAUSTED" } }))).toBe("auth");
+    expect(await run(json(429, { error: { code: 429, message: "Resource exhausted", status: "RESOURCE_EXHAUSTED" } }))).toBe("rate_limit");
+    expect(await run(json(400, { error: { code: 400, message: "API key not valid. Please pass a valid API key.", status: "INVALID_ARGUMENT" } }))).toBe("auth");
+    expect(await run(json(503, { error: { code: 503, message: "overloaded" } }))).toBe("transient");
+  });
+
+  it("refuses unverified Gemini models", () => {
+    expect(() => new GeminiImageProvider({ apiKey: "k", model: "gemini-made-up", timeoutMs: 1 })).toThrow(/verified/);
   });
 });

@@ -36,6 +36,10 @@ const schema = z.object({
   OPENAI_IMAGE_INPUT_USD_PER_MTOK: z.coerce.number().nonnegative().optional(),
   OPENAI_IMAGE_INPUT_IMAGE_USD_PER_MTOK: z.coerce.number().nonnegative().optional(),
   OPENAI_IMAGE_OUTPUT_USD_PER_MTOK: z.coerce.number().nonnegative().optional(),
+  GEMINI_API_KEY: z.string().optional(),
+  GEMINI_IMAGE_MODEL: z.string().default("gemini-3.1-flash-image"),
+  // Engine preselected in the studio when both are configured.
+  DEFAULT_IMAGE_ENGINE: z.enum(["openai", "gemini"]).default("openai"),
   MODERATION_PROVIDER: z.enum(["openai", "baseline"]).default("openai"),
 
   // Stripe (TEST MODE ONLY until owner approval)

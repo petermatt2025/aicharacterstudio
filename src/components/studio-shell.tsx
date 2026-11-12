@@ -15,7 +15,9 @@ type Access = { ok: true; beta: boolean } | { ok: false; reason: string; message
 
 const TERMINAL = new Set(["succeeded", "partial", "failed", "canceled", "rejected"]);
 
-export function StudioShell({ tool, access, characters, initialAssets, emailVerified }: { tool: ToolDef; access: Access; characters: Character[]; initialAssets: AssetLite[]; emailVerified: boolean }) {
+type EngineOption = { key: "openai" | "gemini"; label: string; hint: string };
+
+export function StudioShell({ tool, access, characters, initialAssets, emailVerified, engines = [] }: { tool: ToolDef; access: Access; characters: Character[]; initialAssets: AssetLite[]; emailVerified: boolean; engines?: EngineOption[] }) {
   const router = useRouter();
   const [assets, setAssets] = useState(initialAssets);
   const [characterId, setCharacterId] = useState<string | null>(characters[0]?.id ?? null);
@@ -25,6 +27,7 @@ export function StudioShell({ tool, access, characters, initialAssets, emailVeri
   const [aspectRatio, setAspect] = useState(tool.defaultAspect);
   const [quality, setQuality] = useState<"standard" | "high">("standard");
   const [variations, setVariations] = useState(1);
+  const [engine, setEngine] = useState<EngineOption["key"] | undefined>(engines[0]?.key);
   const [identity, setIdentity] = useState<"loose" | "balanced" | "strict">(characters[0]?.identity_strength ?? "balanced");
   const [quoteState, setQuoteState] = useState<{ q: Quote; fp: string } | null>(null);
   const [job, setJob] = useState<Job | null>(null);
@@ -36,7 +39,7 @@ export function StudioShell({ tool, access, characters, initialAssets, emailVeri
   const useSaved = !!characterSlot && characterId !== null;
 
   // Any input change invalidates the quote (quotes are immutable on the server).
-  const fingerprint = JSON.stringify([characterId, slots, presets, prompt, aspectRatio, quality, variations, identity]);
+  const fingerprint = JSON.stringify([characterId, slots, presets, prompt, aspectRatio, quality, variations, identity, engine]);
   const quote = quoteState && quoteState.fp === fingerprint ? quoteState.q : null;
   const setQuote = (q: Quote | null) => setQuoteState(q ? { q, fp: fingerprint } : null);
 
@@ -65,7 +68,7 @@ export function StudioShell({ tool, access, characters, initialAssets, emailVeri
   );
 
   function requestBody() {
-    return { featureKey: tool.key, characterId: useSaved ? characterId : undefined, references, prompt, presetKeys: presets, aspectRatio, quality, variations, identityStrength: identity };
+    return { featureKey: tool.key, characterId: useSaved ? characterId : undefined, references, prompt, presetKeys: presets, aspectRatio, quality, variations, identityStrength: identity, engine };
   }
 
   async function getQuote() {
@@ -201,6 +204,13 @@ export function StudioShell({ tool, access, characters, initialAssets, emailVeri
                 <option value="high">High (more credits)</option>
               </select>
             </Field>
+            {engines.length > 1 && (
+              <Field label="Engine" htmlFor="engine" hint={engines.find((x) => x.key === engine)?.hint}>
+                <select id="engine" className={inputCls} value={engine} disabled={inputsDisabled} onChange={(e) => setEngine(e.target.value as EngineOption["key"])}>
+                  {engines.map((x) => <option key={x.key} value={x.key}>{x.label}</option>)}
+                </select>
+              </Field>
+            )}
             {tool.allowVariations && (
               <Field label={tool.presetMode === "shots" ? "Variations per selection" : "Variations"} htmlFor="var">
                 <select id="var" className={inputCls} value={variations} disabled={inputsDisabled} onChange={(e) => setVariations(Number(e.target.value))}>

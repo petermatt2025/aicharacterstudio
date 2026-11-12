@@ -10,7 +10,7 @@ import { reserveCredits, settleReservation, getBalance } from "./credits";
 import { moderate } from "./moderation";
 import { rateLimit } from "./rate-limit";
 import { getSetting } from "./seed";
-import { imageProvider } from "./providers";
+import { availableEngines, ENGINES, imageProvider, type Engine } from "./providers";
 import { APP_MAX_REFERENCES } from "./providers/capabilities";
 import { buildShots, type Shot } from "./prompting";
 import type { AspectRatio, Quality, ReferenceRole } from "./providers/types";
@@ -28,6 +28,7 @@ export const quoteRequestSchema = z.object({
   quality: z.enum(["standard", "high"]).default("standard"),
   variations: z.number().int().min(1).max(4).default(1),
   identityStrength: z.enum(["loose", "balanced", "strict"]).optional(),
+  engine: z.enum(ENGINES).optional(),
 });
 export type QuoteRequest = z.infer<typeof quoteRequestSchema>;
 
@@ -46,6 +47,8 @@ export type JobSnapshot = {
   watermark: boolean;
   maxLongEdgePx: number;
   collageOverflow: boolean;
+  /** Image engine chosen for this job (absent on jobs created before engines existed → default). */
+  engine?: Engine;
 };
 
 type Rules = Record<string, { credits: number; per_outputs: number }>;
@@ -174,7 +177,10 @@ export async function createQuote(user: SessionUser, input: z.input<typeof quote
   }
 
   // Provider readiness + capability fallback.
-  const provider = imageProvider();
+  const engines = availableEngines();
+  if (req.engine && !engines.includes(req.engine)) throw new AppError("provider_not_configured", "That image engine is not available right now.");
+  const engine: Engine | undefined = req.engine ?? engines[0];
+  const provider = imageProvider(engine);
   const caps = await provider.capabilities();
   const warnings: string[] = [...tool.warnings];
   let collageOverflow = false;
@@ -204,6 +210,7 @@ export async function createQuote(user: SessionUser, input: z.input<typeof quote
     watermark: plan.watermark,
     maxLongEdgePx: plan.max_long_edge_px,
     collageOverflow,
+    engine,
   };
   const ttl = await getSetting<number>("quote_ttl_seconds");
   const breakdown = { ...calc, outputs, warnings, provider: provider.name, chargePolicy: "You are charged only for images delivered. Unused credits are returned automatically." };

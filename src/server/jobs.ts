@@ -76,8 +76,9 @@ function backoffSeconds(attempt: number) {
  * Process a claimed job. Each output index is persisted as soon as it exists, so a retry or a crashed worker
  * resumes without regenerating (or double-charging) delivered images.
  */
-export async function processJob(job: JobRow, workerId: string, provider: ImageProvider = imageProvider()): Promise<string> {
+export async function processJob(job: JobRow, workerId: string, providerOverride?: ImageProvider): Promise<string> {
   const snap = job.request;
+  const provider = providerOverride ?? imageProvider(snap.engine);
   const started = Date.now();
 
   if (job.attempts > job.max_attempts) {

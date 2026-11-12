@@ -8,6 +8,7 @@ import { TOOLS } from "@/lib/tools";
 import { Badge, ButtonLink, Card, PageHeader } from "@/components/ui";
 import { StudioShell } from "@/components/studio-shell";
 import { AppError } from "@/server/errors";
+import { availableEngines, ENGINE_INFO } from "@/server/providers";
 
 export default async function ToolPage({ params }: { params: Promise<{ featureKey: string }> }) {
   const { featureKey } = await params;
@@ -55,6 +56,7 @@ export default async function ToolPage({ params }: { params: Promise<{ featureKe
         tool={tool}
         access={access}
         emailVerified={user.emailVerified}
+        engines={availableEngines().map((key) => ({ key, ...ENGINE_INFO[key] }))}
         characters={characters.map((c) => ({ id: c.id, name: c.name, primary_asset_id: c.primary_asset_id, identity_strength: c.identity_strength }))}
         initialAssets={assets.filter((a) => a.kind !== "output").map((a) => JSON.parse(JSON.stringify(assetView(a))))}
       />

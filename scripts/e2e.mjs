@@ -143,13 +143,14 @@ async function main() {
   await page.fill("#password", "correct horse battery");
   await page.check("input[name=terms]");
   await page.click("button[type=submit]");
-  await page.waitForURL("**/onboarding");
-  check(true, "signup redirects to onboarding");
+  // Dev/console email: signup goes straight to the verification link (the token from the email outbox).
+  await page.waitForURL("**/verify-email?token=*");
+  check(true, "signup redirects to email verification (dev mailer)");
 
-  // 2. Verify email (token from the console email outbox).
+  // 2. Verify email.
   const mail = await db.query("SELECT body_text FROM email_outbox WHERE to_email=$1", [email]);
   const token = /token=([^\s]+)/.exec(mail.rows[0].body_text)[1];
-  await page.goto(`${BASE}/verify-email?token=${token}`);
+  check(page.url().endsWith(`token=${token}`), "verification link matches the emailed token");
   await page.getByText("15 trial credits added").waitFor();
   check(true, "email verified, 15 trial credits granted");
 
@@ -230,7 +231,7 @@ async function main() {
   await op.fill("#password", "correct horse battery");
   await op.check("input[name=terms]");
   await op.click("button[type=submit]");
-  await op.waitForURL("**/onboarding");
+  await op.waitForURL("**/verify-email?token=*");
   const jobId = (await db.query("SELECT id FROM generation_jobs WHERE workspace_id=$1 LIMIT 1", [ws])).rows[0].id;
   const s1 = (await op.request.get(`${BASE}/api/assets/${outId}/file`)).status();
   const s2 = (await op.request.get(`${BASE}/api/generations/${jobId}`)).status();

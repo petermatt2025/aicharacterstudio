@@ -345,6 +345,16 @@ describe("tools", () => {
     expect(peak).toBe(4);
   });
 
+  it("the chosen engine is stored on the quote snapshot and unknown engines are rejected", async () => {
+    const u = await makeUser({ plan: "pro", credits: 50 });
+    const c = await upload(u);
+    const qg = await createQuote(u, { featureKey: "environment_switch", references: [{ assetId: c.id, role: "character" }], presetKeys: ["cafe"], engine: "gemini" });
+    const row = await one<{ request: { engine?: string } }>(`SELECT request FROM credit_quotes WHERE id=$1`, [qg.quoteId]);
+    expect(row!.request.engine).toBe("gemini");
+    // @ts-expect-error not an engine
+    await expect(createQuote(u, { featureKey: "environment_switch", references: [{ assetId: c.id, role: "character" }], presetKeys: ["cafe"], engine: "midjourney" })).rejects.toThrow();
+  });
+
   it("free-plan outputs are watermarked and downscaled", async () => {
     await q(`INSERT INTO plan_entitlements (plan_key, feature_key, is_enabled) VALUES ('free','environment_switch',true) ON CONFLICT (plan_key, feature_key) DO UPDATE SET is_enabled=true`);
     try {
