@@ -26,7 +26,7 @@ export default async function TextPage({ params }: { params: Promise<{ assetId: 
   if (!a) notFound();
   return (
     <div className="mx-auto max-w-7xl">
-      <PageHeader title="Text Studio" sub="Add exact, editable text to any image. Free, instant, and your original is kept." actions={<Link href="/gallery" className="text-sm text-muted hover:text-ink">← Gallery</Link>} />
+      <PageHeader title="Text Studio" sub="Add exact, editable text to any image. Free, instant, and your original is kept." actions={<div className="flex gap-4 text-sm"><Link href="/text" className="text-muted hover:text-ink">← Pick another image</Link><Link href="/gallery" className="text-muted hover:text-ink">Gallery</Link></div>} />
       <TextStudio assetId={a.id} width={a.width} height={a.height} title={a.title} />
     </div>
   );
