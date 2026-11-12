@@ -674,3 +674,50 @@ describe("campaigns", () => {
     expect((await (await import("@/server/assets")).getAsset(u, extra)).id).toBe(extra);
   });
 });
+
+describe("free trial protection", () => {
+  const setSetting = (key: string, value: unknown) =>
+    q(`INSERT INTO app_settings (key, value) VALUES ($1,$2) ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value`, [key, JSON.stringify(value)]);
+
+  it("free accounts can try every tool on the cheapest engine at standard quality; the shared daily budget stops trials", async () => {
+    await setSetting("trial_features", ["*"]);
+    await setSetting("trial_daily_budget_usd", 1000);
+    try {
+      const u = await makeUser({ plan: "free", beta: false });
+      const c = await upload(u);
+      const q1 = await createQuote(u, { featureKey: "headshots", references: [{ assetId: c.id, role: "character" }], presetKeys: ["corporate"], quality: "high", engine: "openai" });
+      const row = await one<{ request: { engine: string; quality: string } }>(`SELECT request FROM credit_quotes WHERE id=$1`, [q1.quoteId]);
+      expect(row!.request.engine).toBe("gemini");
+      expect(row!.request.quality).toBe("standard");
+      await setSetting("trial_daily_budget_usd", 0);
+      await expect(createQuote(u, { featureKey: "headshots", references: [{ assetId: c.id, role: "character" }], presetKeys: ["corporate"] })).rejects.toMatchObject({ code: "cost_cap_reached" });
+      // Paying customers are unaffected by the trial budget.
+      const paid = await makeUser({ plan: "pro", credits: 20 });
+      const pc = await upload(paid);
+      await expect(createQuote(paid, { featureKey: "headshots", references: [{ assetId: pc.id, role: "character" }], presetKeys: ["corporate"] })).resolves.toHaveProperty("quoteId");
+    } finally {
+      await setSetting("trial_features", []);
+      await setSetting("trial_daily_budget_usd", 2);
+    }
+  });
+
+  it("blocks throwaway email services and limits trials per network", async () => {
+    const { signup, verifyEmail } = await import("@/server/accounts");
+    const { verificationTokenFor } = await import("./helpers");
+    await expect(signup({ email: `x${crypto.randomUUID().slice(0, 6)}@mailinator.com`, password: "correct horse battery", acceptTerms: true })).rejects.toMatchObject({ code: "validation_failed" });
+    await expect(signup({ email: `x${crypto.randomUUID().slice(0, 6)}@inbox.yopmail.com`, password: "correct horse battery", acceptTerms: true })).rejects.toMatchObject({ code: "validation_failed" });
+
+    await setSetting("trial_max_per_network_30d", 2);
+    const ip = `203.0.113.${Math.floor(Math.random() * 200) + 1}`;
+    const grants: number[] = [];
+    for (let i = 0; i < 3; i++) {
+      const email = `net${i}_${crypto.randomUUID().slice(0, 8)}@example.com`;
+      await signup({ email, password: "correct horse battery", acceptTerms: true }, { ip });
+      grants.push((await verifyEmail(await verificationTokenFor(email))).trialGranted);
+    }
+    expect(grants).toEqual([15, 15, 0]); // third account on the same network gets no free credits
+    const other = `net_other_${crypto.randomUUID().slice(0, 8)}@example.com`;
+    await signup({ email: other, password: "correct horse battery", acceptTerms: true }, { ip: "198.51.100.7" });
+    expect((await verifyEmail(await verificationTokenFor(other))).trialGranted).toBe(15);
+  });
+});

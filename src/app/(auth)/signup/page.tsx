@@ -27,7 +27,7 @@ export default function Signup() {
   return (
     <Card className="p-7">
       <h1 className="text-xl font-semibold">Create your account</h1>
-      <p className="mt-1 text-sm text-muted">15 one-time trial credits after you verify your email.</p>
+      <p className="mt-1 text-sm text-muted">Try every tool free with a few test images after you verify your email. No card needed.</p>
       <form onSubmit={submit} className="mt-6 space-y-4">
         <Field label="Name" htmlFor="displayName"><input id="displayName" name="displayName" className={inputCls} autoComplete="name" maxLength={80} /></Field>
         <Field label="Email" htmlFor="email"><input id="email" name="email" type="email" required className={inputCls} autoComplete="email" /></Field>

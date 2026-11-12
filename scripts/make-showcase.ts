@@ -27,6 +27,15 @@ const jobs: Job[] = [
   { name: "neon", aspect: "4:5", ref: "hero", prompt: `${KEEP} Night portrait on a rainy city street with neon magenta and cyan signs reflecting, cyberpunk mood, cinematic. ${FICTIONAL}` },
   { name: "product", aspect: "4:5", prompt: `Luxury product photo of an unbranded amber glass serum bottle with a gold dropper on a pink stone podium, soft shadows, coral and peach backdrop, fresh flowers. No text, no logos.` },
   { name: "man", aspect: "4:5", prompt: `Lifestyle photo of a fictional man in his 40s with a short grey beard, laughing while recording a podcast with a microphone and headphones, warm colorful studio lights. ${FICTIONAL}` },
+  // Varied poses and camera angles (same fictional woman), so the page doesn't repeat one framing.
+  { name: "walk", aspect: "4:5", ref: "hero", prompt: `${KEEP} Full-body shot walking toward the camera across a sunny city crosswalk, mid-stride, wearing a white shirt and wide-leg trousers, candid street-style photo. ${FICTIONAL}` },
+  { name: "profile", aspect: "4:5", ref: "hero", prompt: `${KEEP} Elegant side profile looking out over the sea from a balcony at sunset, hair moving in the wind, cinematic rim light. ${FICTIONAL}` },
+  { name: "above", aspect: "4:5", ref: "hero", prompt: `${KEEP} Top-down overhead shot of her lying on a picnic blanket in a flower meadow, smiling up at the camera, book beside her. ${FICTIONAL}` },
+  { name: "back", aspect: "4:5", ref: "hero", prompt: `${KEEP} Over-the-shoulder shot from behind as she looks back at the camera, standing in a colorful flower market, warm afternoon light. ${FICTIONAL}` },
+  { name: "laugh", aspect: "4:5", ref: "hero", prompt: `${KEEP} Tight close-up, head tilted, laughing with eyes closed, natural window light, shallow depth of field. ${FICTIONAL}` },
+  { name: "lowangle", aspect: "4:5", ref: "hero", prompt: `${KEEP} Dramatic low-angle full-body shot on a rooftop at dusk, arms crossed, confident, city skyline and purple sky behind. ${FICTIONAL}` },
+  { name: "sitting", aspect: "4:5", ref: "hero", prompt: `${KEEP} Three-quarter view sitting cross-legged on a velvet armchair in a stylish living room, holding a coffee cup, relaxed smile. ${FICTIONAL}` },
+  { name: "yoga", aspect: "4:5", ref: "hero", prompt: `${KEEP} Side view doing a yoga pose on a wooden deck by the ocean at sunrise, athletic wear, peaceful. ${FICTIONAL}` },
   { name: "mascot", aspect: "1:1", prompt: `Original 3D cartoon brand mascot: a cheerful round orange fox wearing a teal hoodie, waving, soft studio lighting, pastel coral background. Original character. No text.` },
 ];
 
@@ -54,7 +63,7 @@ async function main() {
   const hero = fs.existsSync(heroPath) ? fs.readFileSync(heroPath) : await sharp(path.join(OUT, "hero.webp")).png().toBuffer();
   const rest = jobs.slice(1);
   let i = 0;
-  await Promise.all(Array.from({ length: 4 }, async () => {
+  await Promise.all(Array.from({ length: 2 }, async () => {
     while (i < rest.length) {
       const j = rest[i++]!;
       try { await run(j, hero); } catch (err) { console.log(`FAILED ${j.name}: ${(err as Error).message}`); }

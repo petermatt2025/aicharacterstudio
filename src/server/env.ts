@@ -67,7 +67,7 @@ const schema = z.object({
   // Ops
   WORKER_CONCURRENCY: z.coerce.number().int().min(1).max(32).default(2),
   SESSION_TTL_DAYS: z.coerce.number().int().min(1).max(90).default(30),
-  TRIAL_CREDITS: z.coerce.number().int().min(0).default(15),
+  TRIAL_CREDITS: z.coerce.number().int().min(0).default(6), // 2 test images at 3 credits
   TRIAL_CREDIT_DAYS: z.coerce.number().int().min(1).default(30),
   TOPUP_EXPIRY_MONTHS: z.coerce.number().int().min(1).default(12),
   MAX_UPLOAD_BYTES: z.coerce.number().int().positive().default(15 * 1024 * 1024),

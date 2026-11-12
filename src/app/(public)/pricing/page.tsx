@@ -72,7 +72,7 @@ export default async function Pricing() {
         <Card>
           <h2 className="text-lg font-semibold">The fine print</h2>
           <ul className="mt-4 list-disc space-y-2 pl-5 text-sm text-muted">
-            <li>Free trial: 15 one-time credits per person, expiring after 30 days.</li>
+            <li>Free trial: a few watermarked test images per person on any tool, once per person, expiring after 30 days.</li>
             <li>Monthly plan credits expire at the end of each billing period. Annual plans receive credits monthly.</li>
             <li>Top-up credits (paid plans) are spent after plan credits and last 12 months.</li>
             <li>Failed or blocked generations return unused credits automatically. No overages, no negative balances.</li>

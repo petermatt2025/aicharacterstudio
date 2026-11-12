@@ -8,6 +8,7 @@ import { sendMail } from "./mailer";
 import { ensureWallet, grantCredits } from "./credits";
 import { track, audit } from "./audit";
 import { getSetting } from "./seed";
+import { isDisposableEmail, networkHash, trialAllowedForNetwork } from "./trial";
 
 export const signupSchema = z.object({
   email: z.string().trim().toLowerCase().email().max(254),
@@ -49,16 +50,17 @@ export async function signupAllowed(email: string): Promise<boolean> {
   return list.includes(e);
 }
 
-export async function signup(input: z.input<typeof signupSchema>) {
+export async function signup(input: z.input<typeof signupSchema>, opts: { ip?: string | null } = {}) {
   const data = signupSchema.parse(input);
+  if (await isDisposableEmail(data.email)) throw new AppError("validation_failed", "Please use a permanent email address (temporary inboxes are not accepted).");
   if (!(await signupAllowed(data.email))) throw new AppError("forbidden", "Sign-up is invite-only right now. Ask for an invite.");
   const passwordHash = await hashPassword(data.password);
   const user = await tx(async (c) => {
     const exists = await one(`SELECT 1 FROM users WHERE lower(email)=$1 AND status <> 'deleted'`, [data.email], c);
     if (exists) throw new AppError("email_taken", "An account with this email already exists.");
     const u = await one<{ id: string }>(
-      `INSERT INTO users (email, email_canonical, password_hash, display_name) VALUES ($1,$2,$3,$4) RETURNING id`,
-      [data.email, canonicalEmail(data.email), passwordHash, data.displayName],
+      `INSERT INTO users (email, email_canonical, password_hash, display_name, signup_ip_hash) VALUES ($1,$2,$3,$4,$5) RETURNING id`,
+      [data.email, canonicalEmail(data.email), passwordHash, data.displayName, networkHash(opts.ip)],
       c,
     );
     const ws = await one<{ id: string }>(`INSERT INTO workspaces (owner_user_id, name) VALUES ($1, $2) RETURNING id`, [u!.id, "Personal"], c);
@@ -125,9 +127,13 @@ export async function verifyEmail(token: string) {
       await audit(null, "user.bootstrap_admin", `user:${t.user_id}`, {}, c);
     }
     let trialGranted = 0;
-    // Stored as a hash so no plaintext email survives account deletion.
-    const claim = await one(`INSERT INTO trial_claims (email_canonical) VALUES ($1) ON CONFLICT DO NOTHING RETURNING 1 AS ok`, [sha256(`trial:${u.email_canonical}`)], c);
     const trial = env().TRIAL_CREDITS;
+    const net = await one<{ signup_ip_hash: string | null }>(`SELECT signup_ip_hash FROM users WHERE id=$1`, [t.user_id], c);
+    // One trial per real inbox (hash, so no plaintext email survives deletion) and a limited number per network.
+    const networkOk = trial > 0 && (await trialAllowedForNetwork(net?.signup_ip_hash ?? null));
+    const claim = networkOk
+      ? await one(`INSERT INTO trial_claims (email_canonical, ip_hash) VALUES ($1,$2) ON CONFLICT DO NOTHING RETURNING 1 AS ok`, [sha256(`trial:${u.email_canonical}`), net?.signup_ip_hash ?? null], c)
+      : null;
     if (claim && trial > 0) {
       const ws = await one<{ id: string }>(`SELECT id FROM workspaces WHERE owner_user_id=$1 AND deleted_at IS NULL ORDER BY created_at LIMIT 1`, [t.user_id], c);
       const expires = new Date(Date.now() + env().TRIAL_CREDIT_DAYS * 86400_000);

@@ -6,16 +6,21 @@ import { listFeatures } from "@/server/entitlements";
 // Showcase images: AI-generated with this app's engines; every person shown is fictional.
 const S = (n: string) => `/showcase/${n}.webp`;
 const VARIANTS: Array<[string, string, string]> = [
+  ["walk", "Street style", "Poses"],
+  ["profile", "Side profile", "Character Angles"],
+  ["above", "From above", "Character Angles"],
+  ["back", "Looking back", "Character Angles"],
+  ["laugh", "Close-up", "Expressions"],
+  ["lowangle", "Low angle", "Poses"],
   ["cafe", "Café morning", "Environment & Lifestyle"],
-  ["beach", "Sunset beach", "Environment & Lifestyle"],
-  ["headshot", "Studio headshot", "Headshot Factory"],
+  ["yoga", "Sunrise yoga", "Environment & Lifestyle"],
   ["anime", "Anime", "Style Transformer"],
-  ["popart", "Pop art", "Style Transformer"],
-  ["neon", "Neon night", "Scene + style"],
 ];
-const MARQUEE = ["hero", "cafe", "anime", "product", "neon", "popart", "man", "beach", "mascot", "headshot"];
+const MARQUEE = ["walk", "cafe", "anime", "above", "product", "lowangle", "popart", "profile", "man", "yoga", "neon", "back", "mascot", "sitting", "laugh", "headshot"];
 const STYLE_CHIPS = ["Photoreal", "Cinematic", "Anime", "Pop art", "Watercolor", "Cyberpunk", "Pixel art", "Oil painting", "Claymation", "Film noir", "Synthwave", "Chibi"];
 const STUDIO_TINTS = ["from-[#ff8a4c]/25", "from-[#ff4f7b]/25", "from-[#d14bff]/25", "from-[#ffb347]/25", "from-[#8b5cff]/25", "from-[#ff6fae]/25"];
+
+const TIER_LABEL: Record<string, string> = { free: "Free", creator: "Creator", pro: "Pro", agency: "Agency" };
 
 const STEPS = [
   ["Upload once", "Add one clear photo of yourself (or someone who said yes) and save it as your Character."],
@@ -43,6 +48,7 @@ function Photo({ name, alt, className = "", label }: { name: string; alt: string
 export default async function Landing() {
   const features = await listFeatures();
   const tools = features.filter((f) => f.tool_number !== null);
+  const usable = features.filter((f) => f.release_state === "live" || f.release_state === "beta");
   return (
     <div className="overflow-x-clip">
       {/* ── Hero ── */}
@@ -55,7 +61,7 @@ export default async function Landing() {
         <div className="mx-auto grid max-w-6xl items-center gap-12 px-4 pb-20 pt-14 md:grid-cols-[1.05fr_1fr] md:pt-20">
           <div>
             <span className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs font-medium text-white/80 backdrop-blur">
-              <span className="h-1.5 w-1.5 rounded-full bg-[#ff7a45]" /> Private beta · 30 creative tools
+              <span className="h-1.5 w-1.5 rounded-full bg-[#ff7a45]" /> 30 creative AI tools · Try free
             </span>
             <h1 className="font-display mt-6 text-5xl font-semibold leading-[1.02] tracking-tight md:text-7xl">
               One photo.<br />
@@ -65,16 +71,16 @@ export default async function Landing() {
               Turn a single portrait into café mornings, sunset walks, studio headshots, anime and pop-art portraits, product shots and ad campaigns, all with the same face.
             </p>
             <div className="mt-9 flex flex-wrap items-center gap-3">
-              <Link href="/signup" className="bg-sunset rounded-full px-7 py-3.5 text-base font-semibold text-white shadow-lg shadow-[#ff4f7b]/30 transition hover:brightness-110">Start free · 15 credits</Link>
+              <Link href="/signup" className="bg-sunset rounded-full px-7 py-3.5 text-base font-semibold text-white shadow-lg shadow-[#ff4f7b]/30 transition hover:brightness-110">Try it free</Link>
               <Link href="#gallery" className="rounded-full border border-white/20 px-6 py-3.5 text-base font-medium text-white/90 hover:bg-white/10">See what it makes</Link>
             </div>
             <p className="mt-4 text-xs text-white/50">No card needed. Likeness is approximate, never guaranteed.</p>
           </div>
           <div className="relative mx-auto h-[30rem] w-full max-w-md md:h-[34rem]" aria-label="AI-generated examples of one fictional person">
             <Photo name="hero" alt="Fictional woman, original reference portrait" label="Your photo" className="absolute left-[18%] top-0 z-20 h-[72%] w-[64%] -rotate-2" />
-            <Photo name="anime" alt="Same woman as an anime illustration" label="Anime" className="absolute left-0 top-[40%] z-30 h-[46%] w-[44%] -rotate-6" />
+            <Photo name="walk" alt="Same woman walking across a city street" label="Street style" className="absolute left-0 top-[40%] z-30 h-[46%] w-[44%] -rotate-6" />
             <Photo name="popart" alt="Same woman as pop art" label="Pop art" className="absolute right-0 top-[8%] z-10 h-[40%] w-[38%] rotate-6" />
-            <Photo name="cafe" alt="Same woman in a café" label="Café" className="absolute bottom-0 right-[4%] z-30 h-[44%] w-[42%] rotate-3" />
+            <Photo name="above" alt="Same woman photographed from above in a flower meadow" label="From above" className="absolute bottom-0 right-[4%] z-30 h-[44%] w-[42%] rotate-3" />
             <span className="font-display absolute -bottom-6 left-[2%] z-40 rotate-[-4deg] text-2xl italic text-white/90 drop-shadow">same face, any world ✦</span>
           </div>
         </div>
@@ -101,7 +107,7 @@ export default async function Landing() {
             <Photo name="hero" alt="Original reference portrait of a fictional woman" className="h-full min-h-[24rem]" />
             <span className="bg-sunset absolute -top-3 left-6 rounded-full px-3 py-1 text-xs font-bold text-white">1 reference photo</span>
           </div>
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
             {VARIANTS.map(([n, title, tool]) => (
               <figure key={n} className="group relative aspect-[4/5] overflow-hidden rounded-[1.4rem] ring-1 ring-white/10">
                 <img src={S(n)} alt={`${title}: the same fictional woman`} loading="lazy" className="h-full w-full object-cover transition duration-500 group-hover:scale-105" />
@@ -132,8 +138,8 @@ export default async function Landing() {
           </div>
           <div className="grid grid-cols-3 gap-3">
             <Photo name="neon" alt="Neon night portrait" className="col-span-2 row-span-2 aspect-[4/5]" label="Cyberpunk" />
-            <Photo name="anime" alt="Anime style" className="aspect-[4/5]" />
-            <Photo name="popart" alt="Pop art style" className="aspect-[4/5]" />
+            <Photo name="anime" alt="Anime style" className="aspect-[4/5]" label="Anime" />
+            <Photo name="popart" alt="Pop art style" className="aspect-[4/5]" label="Pop art" />
           </div>
         </div>
       </section>
@@ -161,9 +167,42 @@ export default async function Landing() {
                 );
               })}
             </div>
-            <p className="mt-4 text-sm text-white/50">{tools.length} tools in total. New tools start in beta.</p>
+            <p className="mt-4 text-sm text-white/50"><a href="#tools" className="underline-offset-4 hover:underline">See all {tools.length} tools ↓</a></p>
           </div>
         </div>
+      </section>
+
+      {/* ── All tools ── */}
+      <section id="tools" className="mx-auto max-w-6xl px-4 py-20">
+        <div className="max-w-2xl">
+          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[#d14bff]">Everything inside</p>
+          <h2 className="font-display mt-3 text-4xl font-semibold leading-tight md:text-5xl">{usable.length} tools, <em className="text-sunset">one studio.</em></h2>
+          <p className="mt-4 text-lg text-white/70">Try any of them free. The badge shows the plan that includes each tool.</p>
+        </div>
+        <div className="mt-10 grid gap-5 md:grid-cols-2 lg:grid-cols-3">
+          {STUDIOS.map((st, i) => {
+            const list = usable.filter((f) => f.studio === st.key);
+            if (!list.length) return null;
+            return (
+              <div key={st.key} className={`rounded-[1.6rem] border border-white/10 bg-gradient-to-br ${STUDIO_TINTS[i % STUDIO_TINTS.length]} to-transparent p-5`}>
+                <h3 className="font-display text-xl font-semibold">{st.name}</h3>
+                <p className="text-xs text-white/55">{st.blurb}</p>
+                <ul className="mt-4 space-y-3">
+                  {list.map((f) => (
+                    <li key={f.key}>
+                      <p className="flex items-center justify-between gap-2 text-sm font-medium">
+                        <span>{f.name}</span>
+                        <span className="shrink-0 rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white/75">{TIER_LABEL[f.min_tier] ?? f.min_tier}</span>
+                      </p>
+                      <p className="mt-0.5 text-xs leading-relaxed text-white/60">{f.description}</p>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            );
+          })}
+        </div>
+        <p className="mt-6 text-sm text-white/55">Every plan also includes the Image Editor (edit, expand, upscale, remove background), the Text Studio, Style boards and Campaigns.</p>
       </section>
 
       {/* ── How it works ── */}
@@ -199,7 +238,7 @@ export default async function Landing() {
       <section className="px-4 py-16">
         <div className="bg-sunset grain relative mx-auto max-w-6xl overflow-hidden rounded-[2.2rem] px-8 py-16 text-center shadow-2xl shadow-[#ff4f7b]/20">
           <h2 className="font-display text-4xl font-semibold text-white md:text-6xl">Your first shoot is <em>on us.</em></h2>
-          <p className="mx-auto mt-4 max-w-xl text-lg text-white/90">15 free credits. Upload one photo and see yourself in a dozen new worlds.</p>
+          <p className="mx-auto mt-4 max-w-xl text-lg text-white/90">Free test images, no card needed. Upload one photo and see yourself in new worlds.</p>
           <div className="mt-8 flex flex-wrap justify-center gap-3">
             <Link href="/signup" className="rounded-full bg-white px-7 py-3.5 font-semibold text-[#c2185b] shadow-lg hover:bg-white/90">Create your account</Link>
             <ButtonLink href="/pricing" variant="secondary" className="rounded-full border-white/40 bg-white/10 px-6 py-3.5 text-white hover:bg-white/20">See pricing</ButtonLink>

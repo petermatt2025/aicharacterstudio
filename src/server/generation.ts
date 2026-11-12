@@ -14,6 +14,7 @@ import { availableEngines, ENGINES, imageProvider, type Engine } from "./provide
 import { getBoard } from "./style-boards";
 import { getCampaign } from "./campaigns";
 import { raiseAlert } from "./alerts";
+import { trialBudgetExhausted } from "./trial";
 import { APP_MAX_REFERENCES } from "./providers/capabilities";
 import { buildShots, type Shot } from "./prompting";
 import type { AspectRatio, Quality, ReferenceRole } from "./providers/types";
@@ -207,7 +208,13 @@ export async function createQuote(user: SessionUser, input: z.input<typeof quote
   // Provider readiness + capability fallback.
   const engines = availableEngines();
   if (req.engine && !engines.includes(req.engine)) throw new AppError("provider_not_configured", "That image engine is not available right now.");
-  const engine: Engine | undefined = req.engine ?? engines[0];
+  const freeTrial = limitsPlanKey(user) === "free";
+  // Free trials always use the cheapest engine at standard quality.
+  const engine: Engine | undefined = freeTrial ? (engines.includes("gemini") ? "gemini" : engines[0]) : req.engine ?? engines[0];
+  if (freeTrial) req.quality = "standard";
+  if (freeTrial && !user.isAdmin && (await trialBudgetExhausted())) {
+    throw new AppError("cost_cap_reached", "Free trials are full for today. Upgrade to start right away, or try again tomorrow.");
+  }
   const provider = imageProvider(engine);
   const caps = await provider.capabilities();
   const warnings: string[] = [...tool.warnings];

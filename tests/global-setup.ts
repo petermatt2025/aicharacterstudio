@@ -14,5 +14,8 @@ export default async function setup() {
   const { closePool } = await import("../src/server/db");
   await runMigrations();
   await seedCatalog();
+  // Most tests check plan gating; trial-specific tests opt into the free trial tools themselves.
+  const { q } = await import("../src/server/db");
+  await q(`UPDATE app_settings SET value='[]' WHERE key='trial_features'`);
   await closePool();
 }

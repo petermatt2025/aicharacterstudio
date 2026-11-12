@@ -14,4 +14,5 @@ Object.assign(process.env, {
   STRIPE_WEBHOOK_SECRET: "whsec_test_secret",
   APP_URL: "http://localhost:3000",
   OPENAI_API_KEY: "",
+  TRIAL_CREDITS: "15", // tests were written against a 15-credit trial
 });

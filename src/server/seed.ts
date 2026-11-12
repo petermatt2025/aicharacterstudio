@@ -24,6 +24,11 @@ export const DEFAULT_SETTINGS: Record<string, unknown> = {
   // Private beta: emails allowed to sign up (in addition to SIGNUP_ALLOWED_EMAILS); signup_open lets anyone in.
   signup_invites: [],
   signup_open: false,
+  // Free trial protection (free plan): which tools, shared daily AI budget, trials per network per 30 days.
+  trial_features: ["*"], // "*" = every tool; or list tool keys, e.g. ["environment_switch"]
+  trial_daily_budget_usd: 2,
+  trial_max_per_network_30d: 2,
+  blocked_email_domains: [],
 };
 
 /** Per-image cost estimate for a provider/quality (falls back to the OpenAI standard estimate). */

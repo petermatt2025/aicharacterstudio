@@ -19,8 +19,13 @@ export function AdminFeatures({ features }: { features: F[] }) {
   const { err, run } = useAction();
   return (
     <Card>
-      <h2 className="font-semibold">Feature flags</h2>
-      <p className="text-xs text-muted">Flip a tool to live only after its real-provider end-to-end test passes. Unimplemented tools stay unusable regardless of state.</p>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="font-semibold">Feature flags</h2>
+        {features.some((f) => f.state === "beta") && (
+          <Button onClick={() => { if (confirm("Make every beta tool live? All paying customers (by plan) can then use them.")) run(() => api("/api/admin/features/publish-all", { method: "POST" })); }}>Make all tools live</Button>
+        )}
+      </div>
+      <p className="text-xs text-muted">Beta = only admins and beta-list users (and free trials). Live = every customer whose plan includes the tool. Unimplemented tools stay unusable regardless of state.</p>
       {err && <Notice tone="error">{err}</Notice>}
       <div className="mt-2 overflow-x-auto"><table className="w-full min-w-[720px] text-sm">
         <thead className="text-left text-muted"><tr><th>#</th><th>Tool</th><th>State</th><th>Min tier</th><th>Multiplier</th><th>Daily cap $</th></tr></thead>

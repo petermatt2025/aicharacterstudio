@@ -28,6 +28,7 @@ const env = {
   APP_URL: BASE,
   DATABASE_URL: DB,
   IMAGE_PROVIDER: "fake",
+  TRIAL_CREDITS: "15",
   MODERATION_PROVIDER: "baseline",
   EMAIL_TRANSPORT: "console",
   STORAGE_DRIVER: "local",
@@ -171,6 +172,7 @@ async function main() {
 
   // 4. Free plan is gated server-side.
   const ws = (await db.query("SELECT w.id FROM workspaces w JOIN users u ON u.id=w.owner_user_id WHERE u.email=$1", [email])).rows[0].id;
+  await db.query("UPDATE app_settings SET value='[]' WHERE key='trial_features'"); // check plan gating without the free trial
   const gated = await page.evaluate(async () => (await fetch("/api/generations/quote", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ featureKey: "character_angles", presetKeys: ["front"] }) })).json());
   check(gated.error?.code === "plan_required", "Free plan blocked from Creator tool by the server");
 

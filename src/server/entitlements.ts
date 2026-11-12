@@ -1,6 +1,7 @@
 import "server-only";
 import { PLAN_RANK, type PlanKey, type ReleaseState } from "@/lib/catalog";
 import { SPECIAL_TOOLS, TOOLS } from "@/lib/tools";
+import { isTrialFeature } from "./trial";
 import type { SessionUser } from "./accounts";
 import { one, q, type Db, pool } from "./db";
 import { AppError } from "./errors";
@@ -83,14 +84,17 @@ export async function featureAccess(user: Pick<SessionUser, "planKey" | "isAdmin
     case "paused":
       return { ok: false, reason: "paused", message: f.pause_reason || "This tool is temporarily paused." };
     case "beta":
-      if (!user.betaAllowlisted && !user.isAdmin) return { ok: false, reason: "beta_only", message: "This tool is in private beta." };
+      if (!user.betaAllowlisted && !user.isAdmin && !(user.planKey === "free" && (await isTrialFeature(f.key)))) {
+        return { ok: false, reason: "beta_only", message: "This tool is in private beta." };
+      }
       break;
     case "live":
       break;
   }
   if (!user.isAdmin) {
     const override = await one<{ is_enabled: boolean }>(`SELECT is_enabled FROM plan_entitlements WHERE plan_key=$1 AND feature_key=$2`, [user.planKey, f.key], db);
-    const allowed = override ? override.is_enabled : PLAN_RANK[user.planKey] >= PLAN_RANK[f.min_tier];
+    const trialTool = user.planKey === "free" && (await isTrialFeature(f.key));
+    const allowed = trialTool || (override ? override.is_enabled : PLAN_RANK[user.planKey] >= PLAN_RANK[f.min_tier]);
     if (!allowed) return { ok: false, reason: "plan_required", requiredPlan: f.min_tier, message: `Requires the ${f.min_tier[0]!.toUpperCase()}${f.min_tier.slice(1)} plan or higher.` };
     if (f.key === "photoshoot") {
       const plan = await getPlan(user.planKey, db);

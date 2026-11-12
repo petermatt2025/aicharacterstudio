@@ -87,7 +87,7 @@ export type PlanSeed = {
 };
 
 export const PLANS: PlanSeed[] = [
-  { key: "free", displayName: "Free", description: "15 one-time trial credits to try the studio. Watermarked, standard resolution.", monthlyCents: 0, annualCents: 0, monthlyCredits: 0, seatCap: 1, maxConcurrentJobs: 1, maxJobsPerDay: 10, maxOutputsPerJob: 2, maxLongEdgePx: 1024, watermark: true, allowsPhotoshoot: false, allowsTopups: false },
+  { key: "free", displayName: "Free", description: "Try it free with a few watermarked test images. No card needed.", monthlyCents: 0, annualCents: 0, monthlyCredits: 0, seatCap: 1, maxConcurrentJobs: 1, maxJobsPerDay: 10, maxOutputsPerJob: 2, maxLongEdgePx: 1024, watermark: true, allowsPhotoshoot: false, allowsTopups: false },
   { key: "creator", displayName: "Creator", description: "For individual creators: personal character and scene studios.", monthlyCents: 1900, annualCents: 19000, monthlyCredits: 200, seatCap: 1, maxConcurrentJobs: 2, maxJobsPerDay: 100, maxOutputsPerJob: 4, maxLongEdgePx: 1536, watermark: false, allowsPhotoshoot: true, allowsTopups: true },
   { key: "pro", displayName: "Pro", description: "For marketers and sellers: mixer, UGC and product tools as they ship.", monthlyCents: 4900, annualCents: 49000, monthlyCredits: 650, seatCap: 1, maxConcurrentJobs: 4, maxJobsPerDay: 300, maxOutputsPerJob: 8, maxLongEdgePx: 2048, watermark: false, allowsPhotoshoot: true, allowsTopups: true },
   { key: "agency", displayName: "Agency", description: "For teams: everything in Pro plus agency tools as they ship.", monthlyCents: 9900, annualCents: 99000, monthlyCredits: 1500, seatCap: 3, maxConcurrentJobs: 8, maxJobsPerDay: 800, maxOutputsPerJob: 12, maxLongEdgePx: 2048, watermark: false, allowsPhotoshoot: true, allowsTopups: true },

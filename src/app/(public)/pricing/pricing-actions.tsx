@@ -65,7 +65,7 @@ export function PricingActions({ plans, signedIn, currentPlan, liveMode = false 
               <p className="mt-4 text-3xl font-semibold">{fmtUsd(price)}<span className="text-sm font-normal text-muted">{p.key === "free" ? "" : interval === "month" ? " /mo" : " /yr"}</span></p>
               <p className="text-xs text-muted">+ applicable tax</p>
               <ul className="mt-4 flex-1 space-y-1.5 text-sm">
-                <li>{p.key === "free" ? "15 one-time trial credits" : `${p.monthlyCredits.toLocaleString()} credits / month`}</li>
+                <li>{p.key === "free" ? "Free test images on every tool" : `${p.monthlyCredits.toLocaleString()} credits / month`}</li>
                 <li>{p.watermark ? "Watermarked, 1024px" : "No watermark, high resolution"}</li>
                 <li>{p.concurrent} generation{p.concurrent > 1 ? "s" : ""} at once</li>
                 {p.seats > 1 && <li>{p.seats} seats (team features coming soon)</li>}

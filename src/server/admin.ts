@@ -75,6 +75,10 @@ const SETTING_VALIDATORS: Record<string, z.ZodType> = {
   alert_cooldown_minutes: z.number().int().min(5).max(1440),
   signup_invites: z.array(z.string().trim().toLowerCase().email().max(254)).max(1000).transform((xs) => [...new Set(xs)]),
   signup_open: z.boolean(),
+  trial_features: z.array(z.string().max(60)).max(30),
+  trial_daily_budget_usd: z.number().nonnegative().max(1000),
+  trial_max_per_network_30d: z.number().int().min(0).max(100),
+  blocked_email_domains: z.array(z.string().trim().toLowerCase().max(253)).max(1000),
 };
 
 export async function patchSetting(admin: SessionUser, key: string, value: unknown) {
@@ -195,4 +199,14 @@ export async function listUsers(admin: SessionUser, search = "") {
 export async function auditLog(admin: SessionUser) {
   assertAdmin(admin);
   return q(`SELECT a.id, a.action, a.target, a.context, a.created_at, u.email AS actor FROM admin_audit_events a LEFT JOIN users u ON u.id=a.actor_id ORDER BY a.id DESC LIMIT 100`);
+}
+
+/** One-click launch: every implemented tool still in beta becomes live (available to all paying plans). */
+export async function publishAllBetaTools(admin: SessionUser) {
+  assertAdmin(admin);
+  const { TOOLS, SPECIAL_TOOLS } = await import("@/lib/tools");
+  const keys = [...Object.keys(TOOLS), ...SPECIAL_TOOLS];
+  const rows = await q<{ key: string }>(`UPDATE features SET release_state='live', updated_at=now() WHERE release_state='beta' AND key = ANY($1) RETURNING key`, [keys]);
+  await audit(admin.id, "feature.publish_all", "features", { count: rows.length });
+  return { published: rows.length };
 }

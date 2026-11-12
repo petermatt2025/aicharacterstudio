@@ -11,7 +11,8 @@ export function SiteHeader({ signedIn }: { signedIn: boolean }) {
         </Link>
         <nav aria-label="Main" className="flex items-center gap-1 text-sm">
           <Link href="/pricing" className="hidden rounded-lg px-3 py-2 text-muted hover:text-ink sm:block">Pricing</Link>
-          <Link href="/#how" className="hidden rounded-lg px-3 py-2 text-muted hover:text-ink sm:block">How it works</Link>
+          <Link href="/#tools" className="hidden rounded-lg px-3 py-2 text-muted hover:text-ink sm:block">Tools</Link>
+          <Link href="/#how" className="hidden rounded-lg px-3 py-2 text-muted hover:text-ink md:block">How it works</Link>
           {signedIn ? (
             <ButtonLink href="/dashboard">Open studio</ButtonLink>
           ) : (
