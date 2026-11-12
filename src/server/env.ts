@@ -51,6 +51,8 @@ const schema = z.object({
 
   // Comma-separated emails that become admin + beta when they verify (owner bootstrap).
   ADMIN_EMAILS: z.string().default(""),
+  // Comma-separated emails allowed to create accounts (private beta). Empty = open sign-up.
+  SIGNUP_ALLOWED_EMAILS: z.string().default(""),
   // Ops
   WORKER_CONCURRENCY: z.coerce.number().int().min(1).max(32).default(2),
   SESSION_TTL_DAYS: z.coerce.number().int().min(1).max(90).default(30),

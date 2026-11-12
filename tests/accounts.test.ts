@@ -32,6 +32,20 @@ describe("accounts", () => {
     await expect(signup({ email: `y_${uid()}@example.com`, password: "correct horse battery", acceptTerms: false })).rejects.toThrow();
   });
 
+  it("invite-only sign-up rejects emails not on SIGNUP_ALLOWED_EMAILS", async () => {
+    const { resetEnvCache } = await import("@/server/env");
+    const invited = `inv_${uid()}@example.com`;
+    process.env.SIGNUP_ALLOWED_EMAILS = ` ${invited.toUpperCase()} , other@example.com`;
+    resetEnvCache();
+    try {
+      await expect(signup({ email: `stranger_${uid()}@example.com`, password: "correct horse battery", acceptTerms: true })).rejects.toMatchObject({ code: "forbidden" });
+      await expect(signup({ email: invited, password: "correct horse battery", acceptTerms: true })).resolves.toHaveProperty("id");
+    } finally {
+      delete process.env.SIGNUP_ALLOWED_EMAILS;
+      resetEnvCache();
+    }
+  });
+
   it("wrong password and unknown user give the same error", async () => {
     const u = await makeUser();
     await expect(login({ email: u.email, password: "nope-nope-nope" })).rejects.toMatchObject({ code: "invalid_credentials" });

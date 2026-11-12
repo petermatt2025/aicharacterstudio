@@ -34,6 +34,8 @@ export type SessionUser = {
 
 export async function signup(input: z.input<typeof signupSchema>) {
   const data = signupSchema.parse(input);
+  const allowed = env().SIGNUP_ALLOWED_EMAILS.split(",").map((x) => x.trim().toLowerCase()).filter(Boolean);
+  if (allowed.length && !allowed.includes(data.email)) throw new AppError("forbidden", "Sign-up is invite-only right now.");
   const passwordHash = await hashPassword(data.password);
   const user = await tx(async (c) => {
     const exists = await one(`SELECT 1 FROM users WHERE lower(email)=$1 AND status <> 'deleted'`, [data.email], c);
