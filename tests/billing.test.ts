@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import Stripe from "stripe";
-import { createSubscriptionCheckout, createTopupCheckout, handleStripeEvent, setStripeForTests, verifyWebhook, allocateAnnualCredits, type StripeLike } from "@/server/billing";
+import { changePlan, createSubscriptionCheckout, createTopupCheckout, handleStripeEvent, setStripeForTests, verifyWebhook, allocateAnnualCredits, type StripeLike } from "@/server/billing";
 import { one, q } from "@/server/db";
 import { checkInvariants } from "@/server/credits";
 import { makeUser, refresh, uid } from "./helpers";
@@ -9,6 +9,7 @@ import { makeUser, refresh, uid } from "./helpers";
 const subs = new Map<string, Stripe.Subscription>();
 const sessions: Array<Record<string, unknown>> = [];
 const invoiceByPi = new Map<string, string>();
+const updates: Array<{ id: string; price: string; proration: string }> = [];
 const fakeStripe = {
   customers: { create: async (p: { metadata: { workspaceId: string } }) => ({ id: `cus_${p.metadata.workspaceId.slice(0, 8)}${uid()}` }) },
   checkout: { sessions: { create: async (p: Record<string, unknown>) => (sessions.push(p), { id: `cs_${uid()}`, url: "https://checkout.stripe.test/session" }) } },
@@ -19,6 +20,13 @@ const fakeStripe = {
   subscriptions: {
     retrieve: async (id: string) => subs.get(id)!,
     cancel: async (id: string) => ({ ...subs.get(id)!, status: "canceled" }),
+    update: async (id: string, p: { items: Array<{ id: string; price: string }>; proration_behavior: string }) => {
+      const cur = subs.get(id)!;
+      updates.push({ id, price: p.items[0]!.price, proration: p.proration_behavior });
+      const next = { ...cur, items: { data: [{ ...cur.items.data[0]!, id: p.items[0]!.id, price: { id: p.items[0]!.price } }] } } as unknown as Stripe.Subscription;
+      subs.set(id, next);
+      return next;
+    },
   },
 } as unknown as StripeLike;
 
@@ -172,6 +180,23 @@ describe("Stripe webhooks", () => {
     expect(await deliver("charge.refunded", { id: `ch_${uid()}`, object: "charge", payment_intent: unknown, amount: 1900, amount_refunded: 1900 })).toBe("ignored");
     const final = await checkInvariants(u.workspaceId);
     expect(final!.ledger_sum).toBe(final!.balance);
+  });
+
+  it("subscribers switch plans in-app: upgrades invoice the difference now, downgrades credit the next invoice", async () => {
+    const { u, subId } = await subscribedUser();
+    await deliver("invoice.paid", invoice(subId));
+    const user = await refresh(u);
+    expect(user.planKey).toBe("creator");
+    const up = await changePlan(user, { planKey: "pro", interval: "month" });
+    expect(up.upgrade).toBe(true);
+    expect(updates.at(-1)).toMatchObject({ id: subId, price: PRICES.proM, proration: "always_invoice" });
+    expect((await refresh(u)).planKey).toBe("pro");
+    await expect(changePlan(await refresh(u), { planKey: "pro", interval: "month" })).rejects.toMatchObject({ code: "conflict" });
+    const down = await changePlan(await refresh(u), { planKey: "creator", interval: "month" });
+    expect(down.upgrade).toBe(false);
+    expect(updates.at(-1)).toMatchObject({ price: PRICES.creatorM, proration: "create_prorations" });
+    const free = await makeUser({ plan: "free" });
+    await expect(changePlan(free, { planKey: "pro", interval: "month" })).rejects.toMatchObject({ code: "not_found" });
   });
 
   it("top-up for another workspace's customer is rejected", async () => {

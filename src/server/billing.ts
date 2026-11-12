@@ -494,3 +494,45 @@ export async function syncStripePrices(admin: SessionUser) {
     return r;
   });
 }
+
+export const changePlanSchema = z.object({ planKey: z.enum(["creator", "pro", "agency"]), interval: z.enum(["month", "year"]) });
+
+/**
+ * In-app plan switch for an existing subscriber. Upgrades are invoiced immediately for the prorated difference
+ * (the resulting invoice.paid with billing_reason=subscription_update tops up the credit allowance); downgrades
+ * take effect now with the unused time credited on the next invoice. Credits already granted are kept.
+ */
+export async function changePlan(user: SessionUser, input: z.input<typeof changePlanSchema>) {
+  const { planKey, interval } = changePlanSchema.parse(input);
+  const cur = await activeSubscription(user.workspaceId);
+  if (!cur) throw new AppError("not_found", "You don't have a subscription yet. Choose a plan to subscribe.");
+  if (cur.status !== "active" && cur.status !== "trialing") throw new AppError("conflict", "Please update your payment method first (Manage billing).");
+  const plan = await getPlan(planKey);
+  const price = interval === "month" ? plan.stripe_price_monthly : plan.stripe_price_annual;
+  if (!price) throw new AppError("billing_not_configured", "This plan isn't purchasable yet (missing Stripe price).");
+  const sub = await stripeCall(user, "plan change", () => stripe().subscriptions.retrieve(cur.stripe_subscription_id));
+  const item = sub.items.data[0];
+  if (!item) throw new AppError("conflict", "Your subscription has no plan item. Contact support.");
+  if (item.price.id === price) throw new AppError("conflict", "You're already on this plan.");
+  const rank: Record<string, number> = { free: 0, creator: 1, pro: 2, agency: 3 };
+  const upgrade = (rank[planKey] ?? 0) > (rank[cur.plan_key] ?? 0) || (planKey === cur.plan_key && interval === "year");
+  const updated = await stripeCall(user, "plan change", () =>
+    stripe().subscriptions.update(
+      sub.id,
+      {
+        items: [{ id: item.id, price }],
+        proration_behavior: upgrade ? "always_invoice" : "create_prorations",
+        payment_behavior: "error_if_incomplete",
+        metadata: { workspaceId: user.workspaceId, planKey },
+      },
+      { idempotencyKey: `plan:${sub.id}:${price}:${Math.floor(Date.now() / 60000)}` },
+    ),
+  );
+  // The update response is authoritative: apply it now (ordered after any event already processed).
+  await tx(async (c) => {
+    const prev = await one<{ last_event_created: Date | null }>(`SELECT last_event_created FROM subscriptions WHERE stripe_subscription_id=$1`, [updated.id], c);
+    await syncSubscription(c, updated, new Date(Math.max(Date.now(), (prev?.last_event_created?.getTime() ?? 0) + 1)));
+  });
+  await track(user.id, "plan_changed", { from: cur.plan_key, to: planKey, interval, upgrade });
+  return { planKey, interval, upgrade };
+}
