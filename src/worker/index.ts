@@ -8,6 +8,7 @@ import { closePool } from "../server/db";
 import { env } from "../server/env";
 import { log } from "../server/audit";
 import { availableEngines } from "../server/providers";
+import { runHealthChecks, workerHeartbeat } from "../server/alerts";
 
 const workerId = `${os.hostname()}:${process.pid}`;
 let stopping = false;
@@ -32,6 +33,8 @@ async function loop(slot: number) {
 async function maintenance() {
   while (!stopping) {
     try {
+      await workerHeartbeat(workerId, { concurrency: env().WORKER_CONCURRENCY, engines: availableEngines(), version: process.env.RAILWAY_GIT_COMMIT_SHA?.slice(0, 7) ?? null });
+      await runHealthChecks();
       await reapExhaustedJobs(`${workerId}:maint`);
       const expired = await sweepAllExpired();
       const annual = billingConfigured() ? await allocateAnnualCredits() : 0;

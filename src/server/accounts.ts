@@ -7,6 +7,7 @@ import { canonicalEmail, hashPassword, randomToken, sha256, verifyPassword } fro
 import { sendMail } from "./mailer";
 import { ensureWallet, grantCredits } from "./credits";
 import { track, audit } from "./audit";
+import { getSetting } from "./seed";
 
 export const signupSchema = z.object({
   email: z.string().trim().toLowerCase().email().max(254),
@@ -32,10 +33,25 @@ export type SessionUser = {
   planKey: "free" | "creator" | "pro" | "agency";
 };
 
+/**
+ * Private beta gate. Open when an admin switched sign-up open, or when no invite list exists at all
+ * (development). Otherwise the email must be in SIGNUP_ALLOWED_EMAILS or the admin-managed invite list.
+ */
+export async function signupAllowed(email: string): Promise<boolean> {
+  const e = email.trim().toLowerCase();
+  const envList = env().SIGNUP_ALLOWED_EMAILS.split(",").map((x) => x.trim().toLowerCase()).filter(Boolean);
+  const [open, invites] = await Promise.all([
+    getSetting<boolean>("signup_open").catch(() => false),
+    getSetting<string[]>("signup_invites").catch(() => [] as string[]),
+  ]);
+  const list = [...envList, ...(Array.isArray(invites) ? invites.map((x) => String(x).toLowerCase()) : [])];
+  if (open === true || list.length === 0) return true;
+  return list.includes(e);
+}
+
 export async function signup(input: z.input<typeof signupSchema>) {
   const data = signupSchema.parse(input);
-  const allowed = env().SIGNUP_ALLOWED_EMAILS.split(",").map((x) => x.trim().toLowerCase()).filter(Boolean);
-  if (allowed.length && !allowed.includes(data.email)) throw new AppError("forbidden", "Sign-up is invite-only right now.");
+  if (!(await signupAllowed(data.email))) throw new AppError("forbidden", "Sign-up is invite-only right now. Ask for an invite.");
   const passwordHash = await hashPassword(data.password);
   const user = await tx(async (c) => {
     const exists = await one(`SELECT 1 FROM users WHERE lower(email)=$1 AND status <> 'deleted'`, [data.email], c);

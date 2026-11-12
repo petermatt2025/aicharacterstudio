@@ -11,7 +11,28 @@ export const DEFAULT_SETTINGS: Record<string, unknown> = {
   rate_limit_uploads_per_hour: 60,
   rate_limit_auth_per_15min: 10,
   storage_quota_mb: { free: 200, creator: 2000, pro: 10000, agency: 30000 },
+  // Estimated provider cost per delivered image (USD), used when the provider doesn't report a price.
+  // Starting estimates only: copy the real numbers from your OpenAI / Google pricing pages in Admin.
+  price_openai_standard_usd: 0.06,
+  price_openai_high_usd: 0.2,
+  price_gemini_standard_usd: 0.04,
+  price_gemini_high_usd: 0.07,
+  // What one credit earns you on average (Creator: $19 / 200 credits). Used for margin estimates.
+  credit_value_usd: 0.095,
+  // Alert emails go to ADMIN_EMAILS; at most one email per alert type per this many minutes.
+  alert_cooldown_minutes: 60,
+  // Private beta: emails allowed to sign up (in addition to SIGNUP_ALLOWED_EMAILS); signup_open lets anyone in.
+  signup_invites: [],
+  signup_open: false,
 };
+
+/** Per-image cost estimate for a provider/quality (falls back to the OpenAI standard estimate). */
+export async function imagePriceUsd(provider: string, quality: "standard" | "high"): Promise<number | null> {
+  if (provider === "fake") return 0.01;
+  const key = `price_${provider === "gemini" ? "gemini" : "openai"}_${quality}_usd`;
+  const v = await getSetting<number | undefined>(key).catch(() => undefined);
+  return typeof v === "number" ? v : null;
+}
 
 /** Inserts missing catalog rows. Never overwrites admin edits. Safe to run repeatedly. */
 export async function seedCatalog() {

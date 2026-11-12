@@ -13,6 +13,7 @@ import { getSetting } from "./seed";
 import { availableEngines, ENGINES, imageProvider, type Engine } from "./providers";
 import { getBoard } from "./style-boards";
 import { getCampaign } from "./campaigns";
+import { raiseAlert } from "./alerts";
 import { APP_MAX_REFERENCES } from "./providers/capabilities";
 import { buildShots, type Shot } from "./prompting";
 import type { AspectRatio, Quality, ReferenceRole } from "./providers/types";
@@ -90,7 +91,7 @@ export function computeCredits(args: { tool: ToolDef; rules: Rules; refs: number
   return { credits, ruleKey, perOutput, multiplier };
 }
 
-async function costGuards(featureKey: string, f: FeatureRow, workspaceId: string) {
+async function costGuards(featureKey: string, f: FeatureRow, workspaceId: string, isAdmin = false) {
   if (!(await getSetting<boolean>("generation_enabled"))) throw new AppError("cost_cap_reached", "Generation is temporarily paused by the operator.");
   const globalCap = await getSetting<number>("global_daily_cost_cap_usd");
   const wsCap = await getSetting<number>("workspace_monthly_cost_cap_usd");
@@ -101,9 +102,12 @@ async function costGuards(featureKey: string, f: FeatureRow, workspaceId: string
        FROM usage_events WHERE created_at > now() - interval '30 days'`,
     [featureKey, workspaceId],
   );
-  if (Number(r!.global) >= globalCap) throw new AppError("cost_cap_reached", "Generation is temporarily paused (daily capacity reached). Please try again later.");
+  if (Number(r!.global) >= globalCap) {
+    void raiseAlert("daily_cap", "Daily AI spending cap reached", "New generations are paused: the last 24 hours of AI cost reached the cap of USD " + globalCap + ". Raise global_daily_cost_cap_usd in Admin, Operations, if this is expected.");
+    throw new AppError("cost_cap_reached", "Generation is temporarily paused (daily capacity reached). Please try again later.");
+  }
   if (f.daily_cost_cap_usd !== null && Number(r!.feature) >= Number(f.daily_cost_cap_usd)) throw new AppError("cost_cap_reached", "This tool has reached its daily capacity. Please try again later.");
-  if (Number(r!.ws) >= wsCap) throw new AppError("cost_cap_reached", "Your workspace reached its monthly fair-use limit. Contact support.");
+  if (!isAdmin && Number(r!.ws) >= wsCap) throw new AppError("cost_cap_reached", "Your workspace reached its monthly fair-use limit. Contact support.");
 }
 
 export async function createQuote(user: SessionUser, input: z.input<typeof quoteRequestSchema>) {
@@ -214,7 +218,7 @@ export async function createQuote(user: SessionUser, input: z.input<typeof quote
     warnings.push("The current model accepts fewer reference images than you provided; extra references are combined into one labeled reference sheet, which may reduce fidelity.");
   }
   if (refs.length > 0 && !caps.imageEdit) throw new AppError("provider_capability", "The current image model can't use reference images.");
-  await costGuards(req.featureKey, f, user.workspaceId);
+  await costGuards(req.featureKey, f, user.workspaceId, user.isAdmin);
 
   const ruleRows = await q<{ key: string; credits: string; per_outputs: number }>(`SELECT key, credits, per_outputs FROM credit_rules`);
   const rules: Rules = Object.fromEntries(ruleRows.map((r) => [r.key, { credits: Number(r.credits), per_outputs: r.per_outputs }]));

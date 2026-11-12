@@ -8,10 +8,14 @@ import { makeUser, refresh, uid } from "./helpers";
 // ── Fake Stripe API (only the calls we make) ──
 const subs = new Map<string, Stripe.Subscription>();
 const sessions: Array<Record<string, unknown>> = [];
+const invoiceByPi = new Map<string, string>();
 const fakeStripe = {
   customers: { create: async (p: { metadata: { workspaceId: string } }) => ({ id: `cus_${p.metadata.workspaceId.slice(0, 8)}${uid()}` }) },
   checkout: { sessions: { create: async (p: Record<string, unknown>) => (sessions.push(p), { id: `cs_${uid()}`, url: "https://checkout.stripe.test/session" }) } },
   billingPortal: { sessions: { create: async () => ({ url: "https://billing.stripe.test/portal" }) } },
+  invoicePayments: {
+    list: async (p: { payment: { payment_intent: string } }) => ({ data: invoiceByPi.has(p.payment.payment_intent) ? [{ invoice: invoiceByPi.get(p.payment.payment_intent) }] : [] }),
+  },
   subscriptions: {
     retrieve: async (id: string) => subs.get(id)!,
     cancel: async (id: string) => ({ ...subs.get(id)!, status: "canceled" }),
@@ -147,6 +151,27 @@ describe("Stripe webhooks", () => {
     expect((await checkInvariants(u.workspaceId))!.balance).toBe(base);
     const inv = await checkInvariants(u.workspaceId);
     expect(inv!.ledger_sum).toBe(inv!.balance);
+  });
+
+  it("refunding a subscription payment takes back the matching share of unspent plan credits; a dispute takes the rest", async () => {
+    const { u, subId } = await subscribedUser();
+    const base = (await checkInvariants(u.workspaceId))!.balance;
+    const inv = invoice(subId);
+    await deliver("invoice.paid", inv);
+    expect((await checkInvariants(u.workspaceId))!.balance).toBe(base + 200);
+    const pi = `pi_${uid()}`;
+    invoiceByPi.set(pi, inv.id!);
+    await deliver("charge.refunded", { id: `ch_${uid()}`, object: "charge", payment_intent: pi, amount: 1900, amount_refunded: 950 });
+    expect((await checkInvariants(u.workspaceId))!.balance).toBe(base + 100);
+    // Same refund event content again (cumulative amount unchanged) revokes nothing more.
+    await deliver("charge.refunded", { id: `ch_${uid()}`, object: "charge", payment_intent: pi, amount: 1900, amount_refunded: 950 });
+    expect((await checkInvariants(u.workspaceId))!.balance).toBe(base + 100);
+    await deliver("charge.dispute.created", { id: `dp_${uid()}`, object: "dispute", payment_intent: pi });
+    expect((await checkInvariants(u.workspaceId))!.balance).toBe(base);
+    const unknown = `pi_${uid()}`;
+    expect(await deliver("charge.refunded", { id: `ch_${uid()}`, object: "charge", payment_intent: unknown, amount: 1900, amount_refunded: 1900 })).toBe("ignored");
+    const final = await checkInvariants(u.workspaceId);
+    expect(final!.ledger_sum).toBe(final!.balance);
   });
 
   it("top-up for another workspace's customer is rejected", async () => {

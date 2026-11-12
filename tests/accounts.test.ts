@@ -75,3 +75,23 @@ describe("accounts", () => {
     await expect(login({ email: u.email, password: "correct horse battery" })).rejects.toMatchObject({ code: "invalid_credentials" });
   });
 });
+
+describe("invite-only sign-up (admin managed)", () => {
+  it("allows emails on the admin invite list, blocks others, and opens to all when switched on", async () => {
+    const { signupAllowed } = await import("@/server/accounts");
+    const { q } = await import("@/server/db");
+    const invited = `invitee_${uid()}@example.com`;
+    await q(`INSERT INTO app_settings (key, value) VALUES ('signup_invites', $1) ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value`, [JSON.stringify([invited])]);
+    await q(`INSERT INTO app_settings (key, value) VALUES ('signup_open', 'false') ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value`);
+    try {
+      expect(await signupAllowed(invited.toUpperCase())).toBe(true);
+      expect(await signupAllowed(`stranger_${uid()}@example.com`)).toBe(false);
+      await expect(signup({ email: `stranger_${uid()}@example.com`, password: "correct horse battery", acceptTerms: true })).rejects.toMatchObject({ code: "forbidden" });
+      await q(`UPDATE app_settings SET value='true' WHERE key='signup_open'`);
+      expect(await signupAllowed(`anyone_${uid()}@example.com`)).toBe(true);
+    } finally {
+      await q(`UPDATE app_settings SET value='[]' WHERE key='signup_invites'`);
+      await q(`UPDATE app_settings SET value='false' WHERE key='signup_open'`);
+    }
+  });
+});

@@ -58,3 +58,8 @@ _Last updated: 2026-11-11_
 - Landing page redesigned ("sunset vivid"); showcase images are real gpt-image-2 outputs of fictional people.
 - OpenAI account ran out of credit on 2026-11-12: the OpenAI engine fails until topped up (now detected as non-retryable).
 - Campaigns: folders with a brief, auto-filing of generations ("Save to campaign"), add/remove from Gallery, ZIP download.
+- Launch readiness: subscription refund/dispute credit reversal (Invoice Payments lookup); per-image cost estimates
+  (Admin-editable) feeding the daily/monthly spending caps (admins exempt from the per-workspace cap) and margin by
+  tool/user; email alerts (engine key/credit failures, failure-rate spikes, queue backlog, daily cap, Stripe webhook
+  failures) throttled per kind; /admin/status live checks; Admin "Set up Stripe prices"; Admin-managed invites +
+  open sign-up switch; Stripe errors explained to admins.

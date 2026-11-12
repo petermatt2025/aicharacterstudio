@@ -94,3 +94,51 @@ export function AdminUsers({ users }: { users: U[] }) {
     </Card>
   );
 }
+
+export function StripePricesButton() {
+  const [state, setState] = useState<{ busy: boolean; msg: string | null; tone: "ok" | "error" }>({ busy: false, msg: null, tone: "ok" });
+  async function go() {
+    setState({ busy: true, msg: null, tone: "ok" });
+    try {
+      const r = await api<{ created: number; total: number; livemode: boolean }>("/api/admin/stripe-prices", { method: "POST" });
+      setState({ busy: false, tone: "ok", msg: `Done: ${r.total} prices ready in your Stripe ${r.livemode ? "LIVE" : "test"} account (${r.created} newly created). Reload to see the IDs.` });
+    } catch (e) {
+      setState({ busy: false, tone: "error", msg: (e as Error).message });
+    }
+  }
+  return (
+    <div className="mt-3 space-y-2">
+      <Button onClick={() => void go()} disabled={state.busy}>{state.busy ? "Setting up…" : "Set up Stripe prices"}</Button>
+      <p className="text-xs text-muted">Creates (or finds) the products and prices for every paid plan and credit pack in the Stripe account your STRIPE_SECRET_KEY belongs to, and saves their IDs here. Safe to click again.</p>
+      {state.msg && <Notice tone={state.tone}>{state.msg}</Notice>}
+    </div>
+  );
+}
+
+export function AdminSignups({ invites, open, envCount }: { invites: string[]; open: boolean; envCount: number }) {
+  const { err, run } = useAction();
+  const [text, setText] = useState(invites.join("\n"));
+  const [saved, setSaved] = useState(false);
+  const emails = text.split(/[\s,;]+/).map((x) => x.trim().toLowerCase()).filter(Boolean);
+  const bad = emails.filter((x) => !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(x));
+  return (
+    <Card>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="font-semibold">Sign-ups</h2>
+        <Button variant={open ? "danger" : "secondary"} onClick={() => run(() => api("/api/admin/settings/signup_open", { method: "PATCH", body: { value: !open } }))}>
+          {open ? "Close sign-up (invite-only)" : "Open sign-up to everyone"}
+        </Button>
+      </div>
+      <p className="mt-1 text-sm text-muted">{open ? "Anyone can create an account right now (each verified email gets the free trial credits once)." : "Invite-only: only the emails below can create an account."}</p>
+      {err && <Notice tone="error">{err}</Notice>}
+      <label className="mt-3 block text-sm" htmlFor="invites">Invited emails (one per line)</label>
+      <textarea id="invites" rows={5} className={inputCls + " mt-1 font-mono text-xs"} value={text} onChange={(e) => { setText(e.target.value); setSaved(false); }} placeholder={"friend@gmail.com\ncolleague@company.com"} />
+      {bad.length > 0 && <p className="mt-1 text-xs text-bad">Not an email: {bad.join(", ")}</p>}
+      <div className="mt-2 flex items-center gap-3">
+        <Button disabled={bad.length > 0} onClick={() => run(async () => { await api("/api/admin/settings/signup_invites", { method: "PATCH", body: { value: emails } }); setSaved(true); })}>Save invites ({emails.length})</Button>
+        {saved && <span className="text-sm text-ok">Saved: these people can sign up now.</span>}
+      </div>
+      {envCount > 0 && <p className="mt-2 text-xs text-muted">Also allowed: {envCount} email(s) from the SIGNUP_ALLOWED_EMAILS variable on Railway.</p>}
+    </Card>
+  );
+}

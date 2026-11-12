@@ -13,7 +13,7 @@ const VARIANTS: Array<[string, string, string]> = [
   ["popart", "Pop art", "Style Transformer"],
   ["neon", "Neon night", "Scene + style"],
 ];
-const MARQUEE = ["hero", "cafe", "anime", "product", "neon", "popart", "beach", "headshot"];
+const MARQUEE = ["hero", "cafe", "anime", "product", "neon", "popart", "man", "beach", "mascot", "headshot"];
 const STYLE_CHIPS = ["Photoreal", "Cinematic", "Anime", "Pop art", "Watercolor", "Cyberpunk", "Pixel art", "Oil painting", "Claymation", "Film noir", "Synthwave", "Chibi"];
 const STUDIO_TINTS = ["from-[#ff8a4c]/25", "from-[#ff4f7b]/25", "from-[#d14bff]/25", "from-[#ffb347]/25", "from-[#8b5cff]/25", "from-[#ff6fae]/25"];
 
@@ -143,8 +143,8 @@ export default async function Landing() {
         <div className="grid items-center gap-12 md:grid-cols-[1fr_1.1fr]">
           <div className="grid grid-cols-2 gap-4">
             <Photo name="product" alt="Product photo of a serum bottle" label="Product lifestyle" className="aspect-[4/5] translate-y-6" />
-            <Photo name="headshot" alt="Professional headshot of a fictional woman" label="Headshots" className="aspect-[4/5]" />
-            <Photo name="beach" alt="Campaign photo on a sunset beach" label="Campaign visuals" className="col-span-2 aspect-[2/1]" />
+            <Photo name="man" alt="Fictional man recording a podcast" label="Creator content" className="aspect-[4/5]" />
+            <Photo name="mascot" alt="Original fox mascot" label="Brand mascot" className="col-span-2 aspect-[2/1]" />
           </div>
           <div>
             <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[#ffb347]">For creators, brands & agencies</p>

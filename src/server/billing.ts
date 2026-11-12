@@ -10,9 +10,10 @@ import { sha256 } from "./crypto";
 import { expireSubscriptionGrantsBefore, grantCredits, revokeGrantCredits } from "./credits";
 import { getPlan, type PlanRow } from "./entitlements";
 import { audit, log, track } from "./audit";
+import { raiseAlert } from "./alerts";
 
 /** Minimal surface we use, so tests can inject a fake. */
-export type StripeLike = Pick<Stripe, "customers" | "checkout" | "billingPortal" | "subscriptions">;
+export type StripeLike = Pick<Stripe, "customers" | "checkout" | "billingPortal" | "subscriptions" | "invoicePayments" | "prices" | "products" | "balance">;
 
 let override: StripeLike | null = null;
 let client: Stripe | null = null;
@@ -44,10 +45,26 @@ export function stripe(): StripeLike {
   return client;
 }
 
+/**
+ * Runs a Stripe call made on behalf of a user. Stripe errors become a clear 503: admins see Stripe's own message
+ * (e.g. "No such price") so they can fix the configuration; customers see a generic message. The owner is alerted.
+ */
+async function stripeCall<T>(user: SessionUser, what: string, fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (e) {
+    if (!(e instanceof Stripe.errors.StripeError)) throw e; // only Stripe's own errors are reported as Stripe errors
+    const msg = e.message.slice(0, 300);
+    log("error", "stripe.call_failed", { what, error: msg });
+    void raiseAlert(`stripe_call:${what}`, `Stripe ${what} failed`, `Stripe returned an error during ${what}: ${msg}\n\nIf it says "No such price", open Admin and click "Set up Stripe prices". If it says "Invalid API Key", fix STRIPE_SECRET_KEY on Railway.`);
+    throw new AppError("billing_unavailable", user.isAdmin ? `Stripe error (${what}): ${msg}` : "Payments are temporarily unavailable. Please try again later.");
+  }
+}
+
 async function getOrCreateCustomer(user: SessionUser): Promise<string> {
   const existing = await one<{ stripe_customer_id: string }>(`SELECT stripe_customer_id FROM billing_customers WHERE workspace_id=$1`, [user.workspaceId]);
   if (existing) return existing.stripe_customer_id;
-  const c = await stripe().customers.create({ email: user.email, metadata: { workspaceId: user.workspaceId } }, { idempotencyKey: `customer:${user.workspaceId}` });
+  const c = await stripeCall(user, "customer creation", () => stripe().customers.create({ email: user.email, metadata: { workspaceId: user.workspaceId } }, { idempotencyKey: `customer:${user.workspaceId}` }));
   await q(`INSERT INTO billing_customers (workspace_id, stripe_customer_id) VALUES ($1,$2) ON CONFLICT (workspace_id) DO NOTHING`, [user.workspaceId, c.id]);
   return (await one<{ stripe_customer_id: string }>(`SELECT stripe_customer_id FROM billing_customers WHERE workspace_id=$1`, [user.workspaceId]))!.stripe_customer_id;
 }
@@ -70,7 +87,7 @@ export async function createSubscriptionCheckout(user: SessionUser, input: z.inp
   const price = interval === "month" ? plan.stripe_price_monthly : plan.stripe_price_annual;
   if (!price) throw new AppError("billing_not_configured", "This plan isn't purchasable yet (missing Stripe price).");
   const customer = await getOrCreateCustomer(user);
-  const s = await stripe().checkout.sessions.create({
+  const s = await stripeCall(user, "checkout", () => stripe().checkout.sessions.create({
     mode: "subscription",
     customer,
     client_reference_id: user.workspaceId,
@@ -81,7 +98,7 @@ export async function createSubscriptionCheckout(user: SessionUser, input: z.inp
     cancel_url: `${baseUrl}/pricing?checkout=canceled`,
     automatic_tax: { enabled: process.env.STRIPE_AUTOMATIC_TAX === "true" },
     customer_update: process.env.STRIPE_AUTOMATIC_TAX === "true" ? { address: "auto" } : undefined,
-  });
+  }));
   await track(user.id, "checkout_started", { planKey, interval });
   return { url: s.url };
 }
@@ -97,25 +114,25 @@ export async function createTopupCheckout(user: SessionUser, input: z.input<type
   if (!pack.stripe_price_id) throw new AppError("billing_not_configured", "This pack isn't purchasable yet (missing Stripe price).");
   const customer = await getOrCreateCustomer(user);
   const meta = { kind: "topup", workspaceId: user.workspaceId, packKey: pack.key, credits: String(pack.credits) };
-  const s = await stripe().checkout.sessions.create({
+  const s = await stripeCall(user, "top-up checkout", () => stripe().checkout.sessions.create({
     mode: "payment",
     customer,
     client_reference_id: user.workspaceId,
-    line_items: [{ price: pack.stripe_price_id, quantity: 1 }],
+    line_items: [{ price: pack.stripe_price_id!, quantity: 1 }],
     payment_intent_data: { metadata: meta },
     metadata: meta,
     invoice_creation: { enabled: true },
     success_url: `${baseUrl}/billing?topup=success`,
     cancel_url: `${baseUrl}/billing?topup=canceled`,
     automatic_tax: { enabled: process.env.STRIPE_AUTOMATIC_TAX === "true" },
-  });
+  }));
   return { url: s.url };
 }
 
 export async function createPortalSession(user: SessionUser, baseUrl = env().APP_URL) {
   const existing = await one<{ stripe_customer_id: string }>(`SELECT stripe_customer_id FROM billing_customers WHERE workspace_id=$1`, [user.workspaceId]);
   if (!existing) throw new AppError("not_found", "No billing account yet.");
-  const s = await stripe().billingPortal.sessions.create({ customer: existing.stripe_customer_id, return_url: `${baseUrl}/billing` });
+  const s = await stripeCall(user, "billing portal", () => stripe().billingPortal.sessions.create({ customer: existing.stripe_customer_id, return_url: `${baseUrl}/billing` }));
   return { url: s.url };
 }
 
@@ -205,8 +222,7 @@ async function dispatch(c: pg.PoolClient, event: Stripe.Event): Promise<"process
       const d = event.data.object;
       const pi = typeof d.payment_intent === "string" ? d.payment_intent : d.payment_intent?.id;
       if (!pi) return "ignored";
-      const r = await revokeGrantCredits(c, "topup", pi, "all", "Credits revoked: payment disputed");
-      return r.revoked >= 0 ? "processed" : "ignored";
+      return (await onDisputeCreated(c, pi)) ? "processed" : "ignored";
     }
     default:
       return "ignored";
@@ -353,20 +369,57 @@ async function onTopupPaid(c: pg.PoolClient, pi: Stripe.PaymentIntent): Promise<
   return true;
 }
 
-/** Refunds revoke the matching share of still-unspent top-up credits. Spent credits are never clawed back into negative. */
+/**
+ * The credit grant a payment funded: a top-up (keyed by payment intent) or a subscription invoice
+ * (monthly: keyed by invoice id; annual: first month keyed "...:m0:<invoice>"). Invoice lookup uses the
+ * Invoice Payments API because charges no longer carry an invoice reference.
+ */
+async function grantForPayment(c: pg.PoolClient, pi: string): Promise<{ source: "topup" | "subscription" | "annual_allocation"; source_ref: string; amount: number } | null> {
+  const topup = await one<{ source: "topup"; source_ref: string; amount: number }>(`SELECT source, source_ref, amount FROM credit_grants WHERE source='topup' AND source_ref=$1`, [pi], c);
+  if (topup) return topup;
+  let invoiceId: string | null = null;
+  try {
+    const list = await stripe().invoicePayments.list({ payment: { type: "payment_intent", payment_intent: pi }, limit: 1 });
+    const inv = list.data[0]?.invoice;
+    invoiceId = typeof inv === "string" ? inv : inv?.id ?? null;
+  } catch (e) {
+    log("warn", "billing.invoice_lookup_failed", { pi, error: (e as Error).message });
+  }
+  if (!invoiceId) return null;
+  return one<{ source: "subscription" | "annual_allocation"; source_ref: string; amount: number }>(
+    `SELECT source, source_ref, amount FROM credit_grants
+      WHERE (source='subscription' AND source_ref=$1) OR (source='annual_allocation' AND source_ref LIKE '%:m0:' || $1)
+      ORDER BY created_at LIMIT 1`,
+    [invoiceId],
+    c,
+  );
+}
+
+/**
+ * Refunds revoke the matching share of the still-unspent credits the payment bought (top-ups and subscription
+ * invoices). Spent credits are never clawed back into a negative balance. Repeated partial refunds are cumulative.
+ */
 async function onChargeRefunded(c: pg.PoolClient, ch: Stripe.Charge): Promise<boolean> {
   const pi = typeof ch.payment_intent === "string" ? ch.payment_intent : ch.payment_intent?.id;
   if (!pi) return false;
-  const g = await one<{ amount: number }>(`SELECT amount FROM credit_grants WHERE source='topup' AND source_ref=$1`, [pi], c);
+  const g = await grantForPayment(c, pi);
   if (!g) return false;
   const target = ch.amount > 0 ? Math.floor((g.amount * ch.amount_refunded) / ch.amount) : g.amount;
   const done = await one<{ n: number }>(
-    `SELECT COALESCE(-sum(l.amount),0)::int AS n FROM credit_ledger l JOIN credit_grants cg ON cg.id=l.grant_id WHERE cg.source='topup' AND cg.source_ref=$1 AND l.entry_type='revoke'`,
-    [pi],
+    `SELECT COALESCE(-sum(l.amount),0)::int AS n FROM credit_ledger l JOIN credit_grants cg ON cg.id=l.grant_id WHERE cg.source=$1 AND cg.source_ref=$2 AND l.entry_type='revoke'`,
+    [g.source, g.source_ref],
     c,
   );
   const toRevoke = Math.max(0, target - done!.n);
-  if (toRevoke > 0) await revokeGrantCredits(c, "topup", pi, toRevoke, "Credits revoked: payment refunded");
+  if (toRevoke > 0) await revokeGrantCredits(c, g.source, g.source_ref, toRevoke, "Credits revoked: payment refunded");
+  return true;
+}
+
+/** A dispute (chargeback) revokes all unspent credits the disputed payment bought. */
+async function onDisputeCreated(c: pg.PoolClient, pi: string): Promise<boolean> {
+  const g = await grantForPayment(c, pi);
+  if (!g) return false;
+  await revokeGrantCredits(c, g.source, g.source_ref, "all", "Credits revoked: payment disputed");
   return true;
 }
 
@@ -389,4 +442,55 @@ export async function cancelSubscriptionsForWorkspace(workspaceId: string) {
   const subs = await q<{ stripe_subscription_id: string }>(`SELECT stripe_subscription_id FROM subscriptions WHERE workspace_id=$1 AND status NOT IN ('canceled','incomplete_expired')`, [workspaceId]);
   for (const s of subs) await stripe().subscriptions.cancel(s.stripe_subscription_id);
   return subs.length;
+}
+
+/**
+ * Admin "Set up Stripe prices": finds or creates the products and prices for every paid plan and top-up pack in
+ * the Stripe account of the configured key (matched by lookup_key, which includes the amount, so price changes
+ * create new prices instead of mutating old ones), then stores the IDs in the catalog. Idempotent.
+ */
+export async function syncStripePrices(admin: SessionUser) {
+  if (!admin.isAdmin) throw new AppError("forbidden", "Admins only.");
+  const s = stripe();
+  return stripeCall(admin, "price setup", async () => {
+    const livemode = (await s.balance.retrieve()).livemode;
+    const plans = await q<{ key: string; display_name: string; monthly_price_cents: number; annual_price_cents: number }>(
+      `SELECT key, display_name, monthly_price_cents, annual_price_cents FROM plan_catalog WHERE monthly_price_cents > 0 ORDER BY rank`,
+    );
+    const packs = await q<{ key: string; display_name: string; credits: number; price_cents: number; currency: string }>(`SELECT key, display_name, credits, price_cents, currency FROM topup_packs WHERE active ORDER BY price_cents`);
+    type Item = { kind: "plan" | "pack"; ref: string; field?: "monthly" | "annual"; product: string; lookup: string; amount: number; currency: string; interval?: "month" | "year" };
+    const items: Item[] = [];
+    for (const p of plans) {
+      items.push({ kind: "plan", ref: p.key, field: "monthly", product: `AI Character Studio ${p.display_name}`, lookup: `acs_${p.key}_month_${p.monthly_price_cents}`, amount: p.monthly_price_cents, currency: "usd", interval: "month" });
+      if (p.annual_price_cents > 0) items.push({ kind: "plan", ref: p.key, field: "annual", product: `AI Character Studio ${p.display_name}`, lookup: `acs_${p.key}_year_${p.annual_price_cents}`, amount: p.annual_price_cents, currency: "usd", interval: "year" });
+    }
+    for (const k of packs) items.push({ kind: "pack", ref: k.key, product: `${k.credits.toLocaleString("en-US")} credits (top-up)`, lookup: `acs_topup_${k.key}_${k.price_cents}`, amount: k.price_cents, currency: k.currency || "usd" });
+
+    const existing = await s.prices.list({ lookup_keys: items.map((i) => i.lookup), limit: 100, active: true });
+    const byLookup = new Map(existing.data.map((p) => [p.lookup_key, p.id]));
+    const products = new Map<string, string>();
+    let created = 0;
+    for (const it of items) {
+      let priceId = byLookup.get(it.lookup);
+      if (!priceId) {
+        let productId = products.get(it.product);
+        if (!productId) {
+          const found = await s.products.search({ query: `name:'${it.product.replace(/'/g, "")}' AND active:'true'` });
+          productId = found.data[0]?.id ?? (await s.products.create({ name: it.product, metadata: { app: "ai-character-studio" } })).id;
+          products.set(it.product, productId);
+        }
+        priceId = (await s.prices.create({
+          product: productId, currency: it.currency, unit_amount: it.amount, lookup_key: it.lookup, tax_behavior: "exclusive",
+          ...(it.interval ? { recurring: { interval: it.interval } } : {}), metadata: { app: "ai-character-studio" },
+        })).id;
+        created++;
+      }
+      if (it.kind === "plan") await q(`UPDATE plan_catalog SET ${it.field === "monthly" ? "stripe_price_monthly" : "stripe_price_annual"}=$2 WHERE key=$1`, [it.ref, priceId]);
+      else await q(`UPDATE topup_packs SET stripe_price_id=$2 WHERE key=$1`, [it.ref, priceId]);
+    }
+    return { created, total: items.length, livemode };
+  }).then(async (r) => {
+    await audit(admin.id, "billing.sync_prices", "stripe", r);
+    return r;
+  });
 }

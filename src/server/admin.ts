@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { SessionUser } from "./accounts";
 import { one, q, tx } from "./db";
 import { AppError } from "./errors";
+import { getSetting } from "./seed";
 import { audit } from "./audit";
 import { grantCredits } from "./credits";
 
@@ -66,6 +67,14 @@ const SETTING_VALIDATORS: Record<string, z.ZodType> = {
   rate_limit_uploads_per_hour: z.number().int().min(1).max(10000),
   rate_limit_auth_per_15min: z.number().int().min(1).max(1000),
   storage_quota_mb: z.record(z.string(), z.number().int().nonnegative()),
+  price_openai_standard_usd: z.number().nonnegative().max(5),
+  price_openai_high_usd: z.number().nonnegative().max(5),
+  price_gemini_standard_usd: z.number().nonnegative().max(5),
+  price_gemini_high_usd: z.number().nonnegative().max(5),
+  credit_value_usd: z.number().nonnegative().max(10),
+  alert_cooldown_minutes: z.number().int().min(5).max(1440),
+  signup_invites: z.array(z.string().trim().toLowerCase().email().max(254)).max(1000).transform((xs) => [...new Set(xs)]),
+  signup_open: z.boolean(),
 };
 
 export async function patchSetting(admin: SessionUser, key: string, value: unknown) {
@@ -125,9 +134,11 @@ export async function adminGrantCredits(admin: SessionUser, workspaceId: string,
 export async function usageReport(admin: SessionUser, days: 7 | 30) {
   assertAdmin(admin);
   const since = `${days} days`;
-  const byFeature = await q<{ feature_key: string; calls: number; failures: number; cost_usd: string | null; unpriced: number }>(
-    `SELECT feature_key, count(*)::int AS calls, count(*) FILTER (WHERE NOT success)::int AS failures, sum(cost_usd) AS cost_usd, count(*) FILTER (WHERE cost_usd IS NULL AND success)::int AS unpriced
-       FROM usage_events WHERE created_at > now() - $1::interval GROUP BY feature_key ORDER BY 4 DESC NULLS LAST`,
+  const byFeature = await q<{ feature_key: string; calls: number; failures: number; cost_usd: string | null; unpriced: number; credits: number }>(
+    `SELECT u.feature_key, count(*)::int AS calls, count(*) FILTER (WHERE NOT u.success)::int AS failures, sum(u.cost_usd) AS cost_usd,
+            count(*) FILTER (WHERE u.cost_usd IS NULL AND u.success)::int AS unpriced,
+            COALESCE((SELECT sum(j.credits_charged) FROM generation_jobs j WHERE j.feature_key=u.feature_key AND j.created_at > now() - $1::interval),0)::int AS credits
+       FROM usage_events u WHERE u.created_at > now() - $1::interval GROUP BY u.feature_key ORDER BY 4 DESC NULLS LAST`,
     [since],
   );
   const byModel = await q<{ provider: string; model: string; calls: number; cost_usd: string | null; avg_ms: number }>(
@@ -145,8 +156,10 @@ export async function usageReport(admin: SessionUser, days: 7 | 30) {
       WHERE w.deleted_at IS NULL GROUP BY w.plan_key`,
     [since],
   );
-  const topUsers = await q<{ workspace_id: string; email: string; cost_usd: string | null; calls: number }>(
-    `SELECT u.workspace_id, us.email, sum(u.cost_usd) AS cost_usd, count(*)::int AS calls FROM usage_events u
+  const topUsers = await q<{ workspace_id: string; email: string; cost_usd: string | null; calls: number; credits: number }>(
+    `SELECT u.workspace_id, us.email, sum(u.cost_usd) AS cost_usd, count(*)::int AS calls,
+            COALESCE((SELECT sum(j.credits_charged) FROM generation_jobs j WHERE j.workspace_id=u.workspace_id AND j.created_at > now() - $1::interval),0)::int AS credits
+       FROM usage_events u
        JOIN workspaces w ON w.id=u.workspace_id JOIN users us ON us.id=w.owner_user_id
       WHERE u.created_at > now() - $1::interval GROUP BY 1,2 ORDER BY 3 DESC NULLS LAST LIMIT 10`,
     [since],
@@ -157,7 +170,8 @@ export async function usageReport(admin: SessionUser, days: 7 | 30) {
        FROM subscriptions s JOIN plan_catalog p ON p.key=s.plan_key WHERE s.status IN ('active','trialing','past_due')`,
   );
   const funnel = await q<{ name: string; n: number }>(`SELECT name, count(DISTINCT user_id)::int AS n FROM analytics_events WHERE created_at > now() - $1::interval GROUP BY name`, [since]);
-  return { days, byFeature, byModel, jobs, byPlan, topUsers, mrrCents: mrr?.cents ?? 0, funnel };
+  const creditValue = Number(await getSetting<number>("credit_value_usd").catch(() => 0.095));
+  return { days, byFeature, byModel, jobs, byPlan, topUsers, mrrCents: mrr?.cents ?? 0, funnel, creditValue };
 }
 
 export async function recentJobs(admin: SessionUser) {

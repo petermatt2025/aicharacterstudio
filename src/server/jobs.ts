@@ -14,6 +14,8 @@ import { storage } from "./storage";
 import { moderate } from "./moderation";
 import { env } from "./env";
 import { log, track } from "./audit";
+import { imagePriceUsd } from "./seed";
+import { raiseAlert } from "./alerts";
 import type { JobSnapshot } from "./generation";
 
 export const LEASE_SECONDS = 300;
@@ -122,10 +124,15 @@ export async function processJob(job: JobRow, workerId: string, providerOverride
   } catch (e) {
     // Misconfiguration (e.g. missing API key on the worker): fail fast and refund instead of leaving the job stuck.
     log("error", "provider.not_configured", { jobId: job.id, engine: snap.engine ?? "default", error: (e as Error).message });
+    void raiseAlert("provider_not_configured", "Worker is missing an engine key", `A job for engine "${snap.engine ?? "default"}" could not run: ${(e as Error).message}. Add the key to the worker service's variables.`);
     return finalize(job, workerId, { code: "provider_unavailable", message: "Image generation is temporarily unavailable. Your credits were returned." });
   }
   const started = Date.now();
 
+  if (!snap || !Array.isArray(snap.references) || !Array.isArray(snap.shots)) {
+    log("error", "job.malformed_request", { jobId: job.id });
+    return finalize(job, workerId, { code: "invalid_request", message: "This generation request was invalid. Your credits were returned." });
+  }
   if (job.attempts > job.max_attempts) {
     return finalize(job, workerId, { code: "retries_exhausted", message: "The image provider kept failing. Your unused credits were returned." });
   }
@@ -182,7 +189,8 @@ export async function processJob(job: JobRow, workerId: string, providerOverride
       });
       await q(
         `INSERT INTO usage_events (job_id, workspace_id, feature_key, provider, model, operation, attempt, success, usage, cost_usd, duration_ms) VALUES ($1,$2,$3,$4,$5,$6,$7,true,$8,$9,$10)`,
-        [job.id, job.workspace_id, job.feature_key, res.provider, res.model, referenceImages.length ? "edit" : "generate", job.attempts, JSON.stringify(res.usage), res.providerCostUsdEstimate, Date.now() - t0],
+        [job.id, job.workspace_id, job.feature_key, res.provider, res.model, referenceImages.length ? "edit" : "generate", job.attempts, JSON.stringify(res.usage),
+          res.providerCostUsdEstimate ?? (await imagePriceUsd(res.provider, snap.quality)), Date.now() - t0],
       );
       await q(`UPDATE generation_jobs SET provider=$2, model=$3 WHERE id=$1`, [job.id, res.provider, res.model]);
       warnings.push(...res.warnings);
@@ -200,7 +208,10 @@ export async function processJob(job: JobRow, workerId: string, providerOverride
       );
       log("warn", "job.provider_error", { jobId: job.id, kind: pe.kind, attempt: job.attempts });
       if (pe.retryable && job.attempts < job.max_attempts) return { kind: "retry", pe };
-      if (pe.kind === "auth") log("error", "provider.auth_failure", { provider: provider.name });
+      if (pe.kind === "auth") {
+        log("error", "provider.auth_failure", { provider: provider.name });
+        void raiseAlert(`provider_auth:${provider.name}`, `${provider.name} engine is failing (key or credit)`, `The ${provider.name} image engine rejected requests: ${pe.message}. Usually the account is out of credit or the API key is wrong. Top up or fix the key, then generations work again. Users were refunded automatically.`);
+      }
       return {
         kind: "fail",
         failure:
