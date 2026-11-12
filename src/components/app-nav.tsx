@@ -10,6 +10,7 @@ const LINKS = [
   ["/studio", "Studio"],
   ["/library", "Library"],
   ["/gallery", "Gallery"],
+  ["/studio/image_edit", "Image Editor"],
   ["/text", "Text Studio"],
   ["/styles", "Style boards"],
   ["/campaigns", "Campaigns"],
@@ -22,6 +23,8 @@ export function AppNav({ user, credits }: { user: { email: string; planKey: stri
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const links = user.isAdmin ? [...LINKS, ["/admin", "Admin"] as const] : LINKS;
+  // Highlight only the most specific matching item (e.g. Image Editor, not also Studio).
+  const activeHref = links.map(([h]) => h).filter((h) => path === h || path.startsWith(`${h}/`)).sort((a, b) => b.length - a.length)[0];
   async function logout() {
     await api("/api/auth/logout", { method: "POST" }).catch(() => {});
     router.push("/");
@@ -46,7 +49,7 @@ export function AppNav({ user, credits }: { user: { email: string; planKey: stri
           <ul className="space-y-0.5">
             {links.map(([href, label]) => (
               <li key={href}>
-                <Link href={href} aria-current={path.startsWith(href) ? "page" : undefined} className={cx("block rounded-lg px-3 py-2 text-sm", path.startsWith(href) ? "bg-surface-2 text-ink" : "text-muted hover:text-ink")} onClick={() => setOpen(false)}>
+                <Link href={href} aria-current={activeHref === href ? "page" : undefined} className={cx("block rounded-lg px-3 py-2 text-sm", activeHref === href ? "bg-surface-2 text-ink" : "text-muted hover:text-ink")} onClick={() => setOpen(false)}>
                   {label}
                 </Link>
               </li>
