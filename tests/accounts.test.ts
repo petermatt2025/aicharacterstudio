@@ -95,3 +95,34 @@ describe("invite-only sign-up (admin managed)", () => {
     }
   });
 });
+
+describe("password reset", () => {
+  it("forgot-password email link sets a new password, verifies the email, signs out old sessions, and is single-use", async () => {
+    const { requestPasswordReset, resetPassword, adminResetLink, adminVerifyEmail, userFromSessionToken, login, createSession } = await import("@/server/accounts");
+    const { one } = await import("@/server/db");
+    const email = `reset_${uid()}@example.com`;
+    const { id } = await signup({ email, password: "correct horse battery", acceptTerms: true });
+    const old = await createSession(id);
+    expect(await requestPasswordReset(email)).toEqual({ ok: true });
+    expect(await requestPasswordReset(`nobody_${uid()}@example.com`)).toEqual({ ok: true }); // same answer, no enumeration
+    const mail = await one<{ body_text: string }>(`SELECT body_text FROM email_outbox WHERE to_email=$1 AND subject LIKE 'Reset%' ORDER BY created_at DESC LIMIT 1`, [email]);
+    const token = decodeURIComponent(/token=([^\s]+)/.exec(mail!.body_text)![1]!);
+    const s = await resetPassword(token, "brand new password 1");
+    expect((await userFromSessionToken(s.token))!.emailVerified).toBe(true);
+    expect(await userFromSessionToken(old.token)).toBeNull();
+    await expect(resetPassword(token, "another password 22")).rejects.toMatchObject({ code: "validation_failed" });
+    await expect(login({ email, password: "correct horse battery" })).rejects.toMatchObject({ code: "invalid_credentials" });
+    expect((await login({ email, password: "brand new password 1" })).token).toBeTruthy();
+
+    // Admin tools: manual verify and a copyable reset link.
+    const email2 = `support_${uid()}@example.com`;
+    const u2 = await signup({ email: email2, password: "correct horse battery", acceptTerms: true });
+    const admin = await makeUser({ admin: true });
+    const r = await adminVerifyEmail(admin.id, u2.id);
+    expect(r.trialGranted).toBe(15);
+    const link = await adminResetLink(admin.id, u2.id);
+    const t2 = decodeURIComponent(/token=([^\s]+)/.exec(link.url)![1]!);
+    await resetPassword(t2, "support set password 9");
+    expect((await login({ email: email2, password: "support set password 9" })).token).toBeTruthy();
+  });
+});

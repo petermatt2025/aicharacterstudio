@@ -82,12 +82,16 @@ export function AdminUsers({ users }: { users: U[] }) {
       <h2 className="font-semibold">Users</h2>
       {err && <Notice tone="error">{err}</Notice>}
       <div className="mt-2 overflow-x-auto"><table className="w-full min-w-[720px] text-sm">
-        <thead className="text-left text-muted"><tr><th>Email</th><th>Plan</th><th>Credits</th><th>Verified</th><th>Beta</th><th>Grant</th></tr></thead>
+        <thead className="text-left text-muted"><tr><th>Email</th><th>Plan</th><th>Credits</th><th>Verified</th><th>Beta</th><th>Actions</th></tr></thead>
         <tbody>{users.map((u) => (
           <tr key={u.id} className="border-t border-line">
             <td className="py-1">{u.email}{u.is_admin ? " (admin)" : ""}</td><td>{u.plan_key}</td><td>{u.balance ?? 0}</td><td>{u.email_verified_at ? "yes" : "no"}</td>
             <td><input type="checkbox" aria-label={`Beta access for ${u.email}`} defaultChecked={u.beta_allowlisted} onChange={(e) => run(() => api("/api/admin/users", { body: { action: "beta", userId: u.id, on: e.target.checked } }))} /></td>
-            <td><Button variant="ghost" onClick={() => { const n = Number(prompt("Credits to grant", "10")); const note = prompt("Reason (audited)") ?? ""; if (n > 0 && u.workspace_id) run(() => api("/api/admin/users", { body: { action: "grant", workspaceId: u.workspace_id, amount: n, note } })); }}>Grant…</Button></td>
+            <td className="whitespace-nowrap">
+              <Button variant="ghost" onClick={() => { const n = Number(prompt("Credits to grant", "10")); const note = prompt("Reason (audited)") ?? ""; if (n > 0 && u.workspace_id) run(() => api("/api/admin/users", { body: { action: "grant", workspaceId: u.workspace_id, amount: n, note } })); }}>Grant…</Button>
+              {!u.email_verified_at && <Button variant="ghost" onClick={() => run(() => api("/api/admin/users", { body: { action: "verify", userId: u.id } }))}>Verify</Button>}
+              {!u.is_admin && <Button variant="ghost" onClick={() => run(async () => { const r = await api<{ url: string; expiresInHours: number }>("/api/admin/users", { body: { action: "reset_link", userId: u.id } }); await navigator.clipboard.writeText(r.url).catch(() => {}); prompt(`One-time password reset link for ${u.email} (copied; valid ${r.expiresInHours}h). Send it to them privately:`, r.url); })}>Reset link</Button>}
+            </td>
           </tr>
         ))}</tbody>
       </table></div>

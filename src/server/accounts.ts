@@ -199,3 +199,71 @@ export async function setBetaAllowlist(actorId: string, userId: string, on: bool
   await q(`UPDATE users SET beta_allowlisted=$2 WHERE id=$1`, [userId, on]);
   await audit(actorId, on ? "user.beta_allow" : "user.beta_revoke", `user:${userId}`);
 }
+
+// ───────────── Password reset ─────────────
+
+const RESET_HOURS = 2;
+
+async function createResetToken(userId: string) {
+  const token = randomToken();
+  await q(`UPDATE email_tokens SET used_at=now() WHERE user_id=$1 AND purpose='password_reset' AND used_at IS NULL`, [userId]); // one live link at a time
+  await q(`INSERT INTO email_tokens (user_id, purpose, token_hash, expires_at) VALUES ($1,'password_reset',$2, now() + ($3 || ' hours')::interval)`, [userId, sha256(token), String(RESET_HOURS)]);
+  return `${env().APP_URL}/reset-password?token=${encodeURIComponent(token)}`;
+}
+
+/** "Forgot password": always answers the same way, so it can't be used to discover which emails have accounts. */
+export async function requestPasswordReset(emailInput: string) {
+  const email = z.string().trim().toLowerCase().email().parse(emailInput);
+  const u = await one<{ id: string }>(`SELECT id FROM users WHERE lower(email)=$1 AND status='active'`, [email]);
+  if (u) {
+    const url = await createResetToken(u.id);
+    await sendMail({
+      to: email,
+      subject: `Reset your ${env().APP_NAME} password`,
+      text: `Someone (hopefully you) asked to reset your password.\n\nChoose a new password here:\n${url}\n\nThis link expires in ${RESET_HOURS} hours and works once. If you didn't ask for this, ignore this email.`,
+    });
+    await track(u.id, "password_reset_requested");
+  }
+  return { ok: true };
+}
+
+/** Admin support tool: a one-time reset link to hand to the user directly (e.g. when email isn't set up yet). */
+export async function adminResetLink(actorId: string, userId: string) {
+  const u = await one<{ id: string }>(`SELECT id FROM users WHERE id=$1 AND status='active'`, [userId]);
+  if (!u) throw new AppError("not_found", "User not found");
+  const url = await createResetToken(u.id);
+  await audit(actorId, "user.reset_link", `user:${userId}`);
+  return { url, expiresInHours: RESET_HOURS };
+}
+
+/** Sets a new password from a reset link, verifies the email (they proved access to the link), signs out other sessions. */
+export async function resetPassword(token: string, newPassword: string) {
+  const pw = z.string().min(10, "Use at least 10 characters").max(200).parse(newPassword);
+  const hash = await hashPassword(pw);
+  const userId = await tx(async (c) => {
+    const t = await one<{ id: string; user_id: string }>(
+      `SELECT id, user_id FROM email_tokens WHERE token_hash=$1 AND purpose='password_reset' AND used_at IS NULL AND expires_at > now() FOR UPDATE`,
+      [sha256(token)],
+      c,
+    );
+    if (!t) throw new AppError("validation_failed", "This reset link is invalid or has expired. Ask for a new one.");
+    await c.query(`UPDATE email_tokens SET used_at=now() WHERE id=$1`, [t.id]);
+    await c.query(`UPDATE users SET password_hash=$2, updated_at=now() WHERE id=$1`, [t.user_id, hash]);
+    await c.query(`DELETE FROM sessions WHERE user_id=$1`, [t.user_id]);
+    return t.user_id;
+  });
+  // A working reset link proves control of the address: complete verification (grants the one-time trial if unclaimed).
+  const verified = await one<{ email_verified_at: Date | null }>(`SELECT email_verified_at FROM users WHERE id=$1`, [userId]);
+  if (!verified?.email_verified_at) await adminVerifyEmail(null, userId);
+  await track(userId, "password_reset_completed");
+  return createSession(userId);
+}
+
+/** Admin support tool: mark an email verified by hand (runs the normal verification, incl. trial credits). */
+export async function adminVerifyEmail(actorId: string | null, userId: string) {
+  const token = randomToken();
+  await q(`INSERT INTO email_tokens (user_id, purpose, token_hash, expires_at) VALUES ($1,'verify_email',$2, now() + interval '10 minutes')`, [userId, sha256(token)]);
+  const r = await verifyEmail(token);
+  if (actorId) await audit(actorId, "user.manual_verify", `user:${userId}`);
+  return r;
+}

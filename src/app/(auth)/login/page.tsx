@@ -29,6 +29,7 @@ export default function Login() {
       <form onSubmit={submit} className="mt-6 space-y-4">
         <Field label="Email" htmlFor="email"><input id="email" name="email" type="email" required className={inputCls} autoComplete="email" /></Field>
         <Field label="Password" htmlFor="password"><input id="password" name="password" type="password" required className={inputCls} autoComplete="current-password" /></Field>
+        <p className="-mt-2 text-right text-sm"><Link href="/forgot-password" className="text-muted hover:text-ink">Forgot password?</Link></p>
         {error && <Notice tone="error">{error}</Notice>}
         <Button type="submit" className="w-full" disabled={busy}>{busy ? "Signing in…" : "Sign in"}</Button>
       </form>
