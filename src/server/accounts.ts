@@ -66,9 +66,16 @@ export async function signup(input: z.input<typeof signupSchema>) {
     await ensureWallet(c, ws!.id);
     return { id: u!.id, workspaceId: ws!.id };
   });
-  await sendVerificationEmail(user.id, data.email);
-  await track(user.id, "signup");
-  return user;
+  // The account exists even if the email can't be delivered: never fail sign-up on the email step.
+  let emailSent = true;
+  try {
+    await sendVerificationEmail(user.id, data.email);
+  } catch (e) {
+    emailSent = false;
+    void reportEmailFailure("verification", data.email, e);
+  }
+  await track(user.id, "signup", { emailSent });
+  return { ...user, emailSent };
 }
 
 /** Dev convenience: with the console mailer outside production, return the verification link so the UI can show it. */
@@ -78,6 +85,13 @@ export async function devVerificationUrl(email: string): Promise<string | null> 
   const m = await one<{ body_text: string }>(`SELECT body_text FROM email_outbox WHERE lower(to_email)=lower($1) ORDER BY created_at DESC LIMIT 1`, [email]);
   const token = m && /token=([^\s]+)/.exec(m.body_text)?.[1];
   return token ? `/verify-email?token=${token}` : null;
+}
+
+/** Email delivery problems are the operator's to fix: alert them, keep the user's flow working. */
+export async function reportEmailFailure(kind: string, to: string, e: unknown) {
+  const { raiseAlert } = await import("./alerts");
+  const msg = (e as Error)?.message ?? "unknown error";
+  await raiseAlert("email_send", "Emails are not being delivered", `A ${kind} email to ${to.replace(/^(.).*@/, "$1***@")} could not be sent: ${msg}. Until this is fixed, verify new users in Admin → Users → Verify. Usual causes: the sending domain isn't verified in Resend yet, or EMAIL_FROM uses a domain that isn't verified.`);
 }
 
 export async function sendVerificationEmail(userId: string, email: string) {
@@ -221,7 +235,7 @@ export async function requestPasswordReset(emailInput: string) {
       to: email,
       subject: `Reset your ${env().APP_NAME} password`,
       text: `Someone (hopefully you) asked to reset your password.\n\nChoose a new password here:\n${url}\n\nThis link expires in ${RESET_HOURS} hours and works once. If you didn't ask for this, ignore this email.`,
-    });
+    }).catch((e) => reportEmailFailure("password reset", email, e));
     await track(u.id, "password_reset_requested");
   }
   return { ok: true };

@@ -24,6 +24,7 @@ export type ErrorCode =
   | "cost_cap_reached"
   | "billing_not_configured"
   | "billing_unavailable"
+  | "email_unavailable"
   | "billing_live_mode_blocked"
   | "conflict"
   | "internal";
@@ -54,6 +55,7 @@ const STATUS: Record<ErrorCode, number> = {
   cost_cap_reached: 503,
   billing_not_configured: 503,
   billing_unavailable: 503,
+  email_unavailable: 503,
   billing_live_mode_blocked: 503,
   conflict: 409,
   internal: 500,

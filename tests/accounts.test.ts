@@ -126,3 +126,34 @@ describe("password reset", () => {
     expect((await login({ email: email2, password: "support set password 9" })).token).toBeTruthy();
   });
 });
+
+describe("email delivery failures", () => {
+  it("sign-up still succeeds (and alerts the owner) when the email provider refuses to send", async () => {
+    const { resetEnvCache } = await import("@/server/env");
+    const { one } = await import("@/server/db");
+    const saved = { t: process.env.EMAIL_TRANSPORT, k: process.env.RESEND_API_KEY, f: globalThis.fetch };
+    process.env.EMAIL_TRANSPORT = "resend";
+    process.env.RESEND_API_KEY = "re_test";
+    resetEnvCache();
+    globalThis.fetch = (async (url: RequestInfo | URL, init?: RequestInit) =>
+      String(url).includes("api.resend.com")
+        ? new Response(JSON.stringify({ message: "You can only send testing emails to your own email address" }), { status: 403 })
+        : saved.f(url, init)) as typeof fetch;
+    try {
+      const email = `nomail_${uid()}@example.com`;
+      const r = await signup({ email, password: "correct horse battery", acceptTerms: true });
+      expect(r.emailSent).toBe(false);
+      const row = await one<{ status: string; error: string }>(`SELECT status, error FROM email_outbox WHERE to_email=$1 ORDER BY created_at DESC LIMIT 1`, [email]);
+      expect(row).toMatchObject({ status: "failed" });
+      expect(row!.error).toMatch(/only send testing emails/);
+      await new Promise((res) => setTimeout(res, 50));
+      expect(await one(`SELECT 1 FROM alert_log WHERE kind='email_send' AND created_at > now() - interval '1 minute'`)).toBeTruthy();
+      expect((await login({ email, password: "correct horse battery" })).token).toBeTruthy(); // the account works
+    } finally {
+      globalThis.fetch = saved.f;
+      if (saved.t === undefined) delete process.env.EMAIL_TRANSPORT; else process.env.EMAIL_TRANSPORT = saved.t;
+      if (saved.k === undefined) delete process.env.RESEND_API_KEY; else process.env.RESEND_API_KEY = saved.k;
+      resetEnvCache();
+    }
+  });
+});
