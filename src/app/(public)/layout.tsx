@@ -2,6 +2,7 @@ import "@fontsource-variable/fraunces/index.css";
 import "@fontsource-variable/fraunces/full-italic.css";
 import { SiteFooter, SiteHeader } from "@/components/site-header";
 import { currentUser } from "@/server/http";
+import { env } from "@/server/env";
 
 export const dynamic = "force-dynamic";
 
@@ -11,7 +12,7 @@ export default async function PublicLayout({ children }: { children: React.React
     <>
       <SiteHeader signedIn={!!u} />
       <main id="main">{children}</main>
-      <SiteFooter />
+      <SiteFooter company={env().BUSINESS_NAME} />
     </>
   );
 }

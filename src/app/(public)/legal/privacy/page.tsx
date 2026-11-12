@@ -1,24 +1,58 @@
+import { env } from "@/server/env";
+
 export const metadata = { title: "Privacy" };
 
 export default function Privacy() {
+  const e = env();
+  const mail = e.SUPPORT_EMAIL;
   return (
     <article className="prose-legal mx-auto max-w-3xl px-4 py-14">
       <h1 className="text-3xl font-semibold">Privacy policy</h1>
-      <p className="rounded-lg border border-warn/30 bg-warn/10 p-3 text-sm text-warn">Template for owner review. This text must be reviewed by qualified counsel before public launch and does not constitute legal advice.</p>
+      <p className="text-sm text-muted">Last updated: 12 November 2026</p>
+
+      <h2>Who is responsible</h2>
+      <p>The data controller is {e.BUSINESS_NAME}, {e.BUSINESS_ADDRESS ? `${e.BUSINESS_ADDRESS}, ` : ""}{e.BUSINESS_COUNTRY}. For any privacy question or request, email <a className="text-accent" href={`mailto:${mail}`}>{mail}</a>.</p>
+
       <h2>What we collect</h2>
-      <ul><li>Account data: email, display name, hashed password.</li><li>Images you upload and images generated for you. These may include faces and are treated as sensitive.</li><li>Consent records you confirm on upload.</li><li>Usage, billing and security logs (no image content).</li></ul>
-      <h2>How we use it</h2>
-      <p>To provide the service: storing your private library, sending your inputs to our image-generation provider to create the images you request, billing, abuse prevention and support. We do not sell personal data and do not train our own models on your photos without separate, explicit opt-in.</p>
-      <h2>Processors</h2>
-      <p>[Owner to list: hosting, database/storage, image model provider (e.g. OpenAI), Stripe for payments, email provider.] International transfers rely on [owner to specify safeguards].</p>
-      <h2>Biometric data</h2>
-      <p>We do not build face templates or perform face recognition. Images are processed only to generate the content you request.</p>
-      <h2>Retention and deletion</h2>
-      <p>You can delete any image at any time, and delete your account from Settings. Account deletion removes stored images and anonymizes your account. Accounting records are retained as required by law.</p>
+      <ul>
+        <li><b>Account data:</b> email address, display name and a securely hashed password.</li>
+        <li><b>Your images:</b> photos you upload and the images created for you. These can show faces, so we treat them as sensitive and keep them private to your account.</li>
+        <li><b>Consent records:</b> the rights and consent confirmations you give when uploading.</li>
+        <li><b>Billing data:</b> plan, invoices and payment status. Card details are handled by Stripe; we never see or store your full card number.</li>
+        <li><b>Usage and security logs:</b> actions such as generations and sign-ins, without image content.</li>
+      </ul>
+
+      <h2>Why we use it (legal bases)</h2>
+      <ul>
+        <li>To provide the service you signed up for: storing your private library, sending your inputs to the AI provider to create the images you request, and billing (performance of a contract).</li>
+        <li>To keep the service safe: preventing abuse and fraud, and moderating content (legitimate interests).</li>
+        <li>To meet legal obligations such as tax and accounting.</li>
+      </ul>
+      <p>We do not sell personal data, do not show third-party advertising and do not train our own AI models on your photos.</p>
+
+      <h2>Faces and biometric data</h2>
+      <p>We do not create face templates and do not perform face recognition or identification. Your images are processed only to generate the content you ask for.</p>
+
+      <h2>Who processes data for us</h2>
+      <ul>
+        <li>Railway: hosting, database and file storage.</li>
+        <li>OpenAI and Google (Gemini): image generation and automated content moderation.</li>
+        <li>Stripe: payments and invoicing.</li>
+        <li>Resend: account emails such as verification and password reset.</li>
+      </ul>
+      <p>Some of these providers process data outside the European Economic Area, mainly in the United States. Such transfers rely on the EU-US Data Privacy Framework where the provider is certified, or on the European Commission&apos;s Standard Contractual Clauses.</p>
+
+      <h2>How long we keep it</h2>
+      <p>You can delete any image at any time, and delete your whole account in Settings. Deleting your account removes your stored images and anonymises your account. Billing records are kept for as long as tax law requires (in Portugal, generally 10 years). Security logs are kept for a limited period.</p>
+
+      <h2>Cookies</h2>
+      <p>We use one essential cookie to keep you signed in. We do not use advertising or tracking cookies.</p>
+
       <h2>Your rights</h2>
-      <p>Depending on your location (including under the GDPR), you may access, correct, delete or export your data and object to processing. Contact [support email].</p>
-      <h2>Controller</h2>
-      <p>[Legal entity name, address, tax residence, contact details.]</p>
+      <p>Under the GDPR you can request access to, correction, deletion or export of your data, and object to or restrict processing. Email <a className="text-accent" href={`mailto:${mail}`}>{mail}</a> and we will reply within one month. You can also complain to the Portuguese data protection authority, CNPD (<a className="text-accent" href="https://www.cnpd.pt" rel="noreferrer" target="_blank">cnpd.pt</a>), or the authority where you live.</p>
+
+      <h2>Age</h2>
+      <p>The service is for adults (18+). We do not knowingly process data of children.</p>
     </article>
   );
 }

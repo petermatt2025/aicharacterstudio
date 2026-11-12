@@ -26,11 +26,11 @@ export function SiteHeader({ signedIn }: { signedIn: boolean }) {
   );
 }
 
-export function SiteFooter() {
+export function SiteFooter({ company = "Peter Matt Apps" }: { company?: string }) {
   return (
     <footer className="mt-24 border-t border-line/60">
       <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-4 py-8 text-sm text-muted">
-        <p>© {new Date().getFullYear()} AI Character Studio. All generated images are synthetic.</p>
+        <p>© {new Date().getFullYear()} {company} · AI Character Studio. All generated images are synthetic.</p>
         <nav aria-label="Legal" className="flex flex-wrap gap-4">
           <Link href="/legal/privacy" className="hover:text-ink">Privacy</Link>
           <Link href="/legal/terms" className="hover:text-ink">Terms</Link>

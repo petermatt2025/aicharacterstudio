@@ -12,6 +12,11 @@ const schema = z.object({
   APP_ENV: z.enum(["development", "test", "e2e", "staging", "production"]).optional(),
   APP_URL: z.string().url().default("http://localhost:3000"),
   APP_NAME: z.string().default("AI Character Studio"),
+  // Legal identity shown on the Terms, Privacy and Contact pages (override in the hosting dashboard).
+  BUSINESS_NAME: z.string().default("Peter Matt Apps"),
+  BUSINESS_COUNTRY: z.string().default("Portugal"),
+  BUSINESS_ADDRESS: z.string().default(""),
+  SUPPORT_EMAIL: z.string().email().default("peter@viralmarketignmastery.com"),
   DATABASE_URL: z.string().min(1).default("postgres://localhost:5432/acs_dev"),
 
   // Storage

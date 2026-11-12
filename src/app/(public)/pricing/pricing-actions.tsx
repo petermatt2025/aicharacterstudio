@@ -6,7 +6,7 @@ import { api } from "@/lib/api";
 
 type Plan = { key: string; name: string; description: string; monthlyCents: number; annualCents: number; monthlyCredits: number; monthlyPurchasable: boolean; annualPurchasable: boolean; watermark: boolean; concurrent: number; seats: number };
 
-export function PricingActions({ plans, signedIn, currentPlan }: { plans: Plan[]; signedIn: boolean; currentPlan: string | null }) {
+export function PricingActions({ plans, signedIn, currentPlan, liveMode = false }: { plans: Plan[]; signedIn: boolean; currentPlan: string | null; liveMode?: boolean }) {
   const [interval, setInterval] = useState<"month" | "year">("month");
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -77,7 +77,7 @@ export function PricingActions({ plans, signedIn, currentPlan }: { plans: Plan[]
           );
         })}
       </div>
-      <p className="mt-4 text-center text-xs text-muted">Payments are processed by Stripe. This environment uses Stripe test mode; no real charges are made.</p>
+      <p className="mt-4 text-center text-xs text-muted">{liveMode ? "Secure payments by Stripe. Cancel anytime from Billing → Manage billing." : "Payments are processed by Stripe. This environment uses Stripe test mode; no real charges are made."}</p>
     </>
   );
 }

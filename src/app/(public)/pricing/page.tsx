@@ -5,6 +5,7 @@ import { currentUser } from "@/server/http";
 import { PLAN_RANK, type PlanKey } from "@/lib/catalog";
 import { Badge, Card, fmtUsd } from "@/components/ui";
 import { PricingActions } from "./pricing-actions";
+import { env } from "@/server/env";
 
 export const metadata: Metadata = { title: "Pricing" };
 
@@ -25,6 +26,7 @@ export default async function Pricing() {
       <PricingActions
         signedIn={!!user}
         currentPlan={user?.planKey ?? null}
+        liveMode={/^(sk|rk)_live_/.test(env().STRIPE_SECRET_KEY ?? "") && env().STRIPE_ALLOW_LIVE_MODE}
         plans={plans.map((p) => ({ key: p.key, name: p.display_name, description: p.description, monthlyCents: p.monthly_price_cents, annualCents: p.annual_price_cents, monthlyCredits: p.monthly_credits, monthlyPurchasable: !!p.stripe_price_monthly, annualPurchasable: !!p.stripe_price_annual, watermark: p.watermark, concurrent: p.max_concurrent_jobs, seats: p.seat_cap }))}
       />
 
