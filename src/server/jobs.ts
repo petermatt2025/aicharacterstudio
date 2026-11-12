@@ -91,7 +91,14 @@ function backoffSeconds(attempt: number) {
  */
 export async function processJob(job: JobRow, workerId: string, providerOverride?: ImageProvider): Promise<string> {
   const snap = job.request;
-  const provider = providerOverride ?? imageProvider(snap.engine);
+  let provider: ImageProvider;
+  try {
+    provider = providerOverride ?? imageProvider(snap.engine);
+  } catch (e) {
+    // Misconfiguration (e.g. missing API key on the worker): fail fast and refund instead of leaving the job stuck.
+    log("error", "provider.not_configured", { jobId: job.id, engine: snap.engine ?? "default", error: (e as Error).message });
+    return finalize(job, workerId, { code: "provider_unavailable", message: "Image generation is temporarily unavailable. Your credits were returned." });
+  }
   const started = Date.now();
 
   if (job.attempts > job.max_attempts) {

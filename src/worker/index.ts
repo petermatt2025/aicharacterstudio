@@ -7,6 +7,7 @@ import { pruneRateLimits } from "../server/rate-limit";
 import { closePool } from "../server/db";
 import { env } from "../server/env";
 import { log } from "../server/audit";
+import { availableEngines } from "../server/providers";
 
 const workerId = `${os.hostname()}:${process.pid}`;
 let stopping = false;
@@ -45,7 +46,9 @@ async function maintenance() {
 
 async function main() {
   const e = env();
-  log("info", "worker.start", { workerId, concurrency: e.WORKER_CONCURRENCY, provider: e.IMAGE_PROVIDER });
+  const engines = availableEngines();
+  log("info", "worker.start", { workerId, concurrency: e.WORKER_CONCURRENCY, provider: e.IMAGE_PROVIDER, engines: engines.join(",") || "none" });
+  if (!engines.length) log("error", "worker.no_engines", { message: "No image engine configured on the worker: set OPENAI_API_KEY and/or GEMINI_API_KEY on this service." });
   const shutdown = () => {
     if (stopping) return;
     stopping = true;

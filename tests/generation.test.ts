@@ -370,6 +370,32 @@ describe("tools", () => {
     expect((await getJob(u, jobId)).status).toBe("succeeded");
   });
 
+  it("a worker without the engine's API key fails the job fast and refunds", async () => {
+    const u = await makeUser({ plan: "pro", credits: 50 });
+    const c = await upload(u);
+    const before = (await balanceOf(u.workspaceId)).balance;
+    const quote = await createQuote(u, { featureKey: "environment_switch", references: [{ assetId: c.id, role: "character" }], presetKeys: ["cafe"] });
+    const { jobId } = await createJob(u, { quoteId: quote.quoteId, idempotencyKey: key() });
+    const { resetEnvCache } = await import("@/server/env");
+    const saved = { p: process.env.IMAGE_PROVIDER, k: process.env.OPENAI_API_KEY };
+    process.env.IMAGE_PROVIDER = "openai";
+    delete process.env.OPENAI_API_KEY;
+    resetEnvCache();
+    try {
+      let j = await claimJob(W);
+      while (j && j.id !== jobId) j = await claimJob(W);
+      expect(await processJob(j!, W)).not.toBe("lease_lost");
+    } finally {
+      process.env.IMAGE_PROVIDER = saved.p;
+      if (saved.k !== undefined) process.env.OPENAI_API_KEY = saved.k;
+      resetEnvCache();
+    }
+    const job = await getJob(u, jobId);
+    expect(job.status).toBe("failed");
+    expect(job.errorCode).toBe("provider_unavailable");
+    expect((await balanceOf(u.workspaceId)).balance).toBe(before);
+  });
+
   it("free-plan outputs are watermarked and downscaled", async () => {
     await q(`INSERT INTO plan_entitlements (plan_key, feature_key, is_enabled) VALUES ('free','environment_switch',true) ON CONFLICT (plan_key, feature_key) DO UPDATE SET is_enabled=true`);
     try {
