@@ -68,7 +68,9 @@ let cached: Env | null = null;
 
 export function env(): Env {
   if (cached) return cached;
-  const parsed = schema.safeParse(process.env);
+  // Values pasted into hosting dashboards often carry stray whitespace/line breaks, which break HTTP auth headers.
+  const raw = Object.fromEntries(Object.entries(process.env).map(([k, v]) => [k, typeof v === "string" ? v.replace(/[\u200B-\u200D\u2060\uFEFF]/g, "").trim() : v]));
+  const parsed = schema.safeParse(raw);
   if (!parsed.success) {
     throw new Error(`Invalid environment: ${parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ")}`);
   }
