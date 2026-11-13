@@ -45,8 +45,10 @@ const schema = z.object({
   GEMINI_IMAGE_MODEL: z.string().default("gemini-3.1-flash-image"),
   // Text+vision model for Image-to-Prompt (verified available 2026-11-12).
   GEMINI_TEXT_MODEL: z.string().default("gemini-3.5-flash-lite"),
-  // Photo-to-video (Veo). The status page lists the Veo models your key can use; set this to one of them.
-  GEMINI_VIDEO_MODEL: z.string().default("veo-3.1-fast-generate-preview"),
+  // Photo-to-video on Google: Gemini Omni (verified 2026-11-13). The status page lists the video models your key can use.
+  GEMINI_VIDEO_MODEL: z.string().default("gemini-omni-1.2-flash"),
+  // Which video engine to use: "google" (Gemini Omni, default) or "kling" (needs KLING_* keys).
+  VIDEO_ENGINE: z.enum(["google", "kling"]).default("google"),
   // Kling AI (preferred video engine when its keys are set). Keys from Kling's developer console.
   KLING_ACCESS_KEY: z.string().optional(),
   KLING_SECRET_KEY: z.string().optional(),

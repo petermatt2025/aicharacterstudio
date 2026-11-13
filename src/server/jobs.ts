@@ -376,13 +376,13 @@ async function processVideoJob(job: JobRow, workerId: string): Promise<string> {
       prompt: snap.shots[0]?.prompt ?? "Animate this photo with subtle natural motion.",
       image,
       aspectRatio: snap.aspectRatio === "16:9" ? "16:9" : "9:16",
-      seconds: 6,
+      seconds: 5,
       onWait: async () => (await heartbeat(job.id, workerId)).owned,
     });
     const cost = res.provider === "fake" ? 0.01 : Number(await getSetting<number>("price_video_usd").catch(() => 1.2));
     await q(
       `INSERT INTO usage_events (job_id, workspace_id, feature_key, provider, model, operation, attempt, success, usage, cost_usd, duration_ms) VALUES ($1,$2,$3,$4,$5,'video',$6,true,$7,$8,$9)`,
-      [job.id, job.workspace_id, job.feature_key, res.provider, res.model, job.attempts, JSON.stringify({ seconds: 6 }), cost, Date.now() - t0],
+      [job.id, job.workspace_id, job.feature_key, res.provider, res.model, job.attempts, JSON.stringify({ seconds: 5 }), cost, Date.now() - t0],
     );
     await q(`UPDATE generation_jobs SET provider=$2, model=$3 WHERE id=$1`, [job.id, res.provider, res.model]);
     const id = crypto.randomUUID();

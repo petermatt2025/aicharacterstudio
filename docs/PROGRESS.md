@@ -64,3 +64,7 @@ _Last updated: 2026-11-11_
   failures) throttled per kind; /admin/status live checks; Admin "Set up Stripe prices"; Admin-managed invites +
   open sign-up switch; Stripe errors explained to admins.
 - Photo Animator (Veo via @google/genai): Pro/Agency, 40 credits, 6-second MP4s stored as assets with poster; Gallery 🎬 Animate; status page lists available Veo models; never part of the free trial.
+- Video engine verified live (2026-11-13): Google Gemini Omni (gemini-omni-1.2-flash) via the Interactions API made a
+  5 s 720x1280 H.264+AAC clip in ~30-37 s for ~$0.36 (28,960 output tokens). Full app pipeline checked with
+  scripts/video-check.ts (quote 40 credits → worker → stored MP4 → 40 charged). Veo is not available to this key;
+  Kling remains an optional engine (VIDEO_ENGINE=kling).

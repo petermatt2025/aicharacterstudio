@@ -17,7 +17,7 @@ export const DEFAULT_SETTINGS: Record<string, unknown> = {
   price_openai_high_usd: 0.2,
   price_gemini_standard_usd: 0.04,
   price_gemini_high_usd: 0.07,
-  price_video_usd: 1.2, // estimated cost of one 6-second Veo video
+  price_video_usd: 0.4, // cost of one 5-second Gemini Omni video (measured 2026-11-13: ~29k output tokens at $12/1M)
   // What one credit earns you on average (Creator: $19 / 200 credits). Used for margin estimates.
   credit_value_usd: 0.095,
   // Alert emails go to ADMIN_EMAILS; at most one email per alert type per this many minutes.

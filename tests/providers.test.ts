@@ -231,3 +231,37 @@ describe("Kling video engine", () => {
     expect(mapKlingError(500, 5000, "Server error").kind).toBe("transient");
   });
 });
+
+describe("Gemini Omni video engine", () => {
+  it("creates a background interaction, polls it and returns the inline MP4", async () => {
+    const { OmniVideoProvider } = await import("@/server/providers/omni");
+    const calls: Array<{ url: string; method: string; body?: Record<string, unknown>; key?: string }> = [];
+    let polls = 0;
+    const json = (o: unknown, status = 200) => new Response(JSON.stringify(o), { status });
+    const fakeFetch = (async (url: string, init: RequestInit = {}) => {
+      calls.push({ url, method: init.method ?? "GET", body: typeof init.body === "string" ? JSON.parse(init.body) : undefined, key: (init.headers as Record<string, string>)["x-goog-api-key"] });
+      if (url.endsWith("/interactions") && init.method === "POST") return json({ id: "v1_abc", status: "in_progress" });
+      if (url.endsWith("/interactions/v1_abc")) {
+        if (++polls < 2) return json({ id: "v1_abc", status: "in_progress" });
+        return json({ id: "v1_abc", status: "completed", usage: { total_output_tokens: 28960 }, steps: [{ type: "user_input" }, { type: "thought" }, { type: "model_output", content: [{ type: "video", mime_type: "video/mp4", data: Buffer.from("mp4data").toString("base64") }] }] });
+      }
+      return json({ error: { code: 404, message: "nope" } }, 404);
+    }) as unknown as typeof fetch;
+    const p = new OmniVideoProvider({ apiKey: "KEY", model: "gemini-omni-1.2-flash", fetch: fakeFetch, pollMs: 1 });
+    const r = await p.generate({ prompt: "walk", image: { bytes: Buffer.from("img"), mime: "image/jpeg" }, aspectRatio: "16:9", seconds: 5, onWait: async () => true });
+    expect(r).toMatchObject({ provider: "gemini", model: "gemini-omni-1.2-flash", mime: "video/mp4", width: 1280, height: 720 });
+    expect(r.bytes.toString()).toBe("mp4data");
+    expect(calls[0]!.key).toBe("KEY");
+    expect(calls[0]!.body).toMatchObject({ model: "gemini-omni-1.2-flash", background: true, response_format: { type: "video", aspect_ratio: "16:9", duration: "5s", delivery: "inline" } });
+    expect(p.lastUsage?.total_output_tokens).toBe(28960);
+  });
+
+  it("maps Google errors to the right kinds", async () => {
+    const { mapOmniError } = await import("@/server/providers/omni");
+    expect(mapOmniError(400, "API key not valid. Please pass a valid API key.").kind).toBe("auth");
+    expect(mapOmniError(402, "Your prepayment credits are depleted.").kind).toBe("auth");
+    expect(mapOmniError(429, "Resource exhausted").kind).toBe("rate_limit");
+    expect(mapOmniError(400, "This model only supports Interactions API.").kind).toBe("invalid_request");
+    expect(mapOmniError(503, "unavailable").kind).toBe("transient");
+  });
+});
